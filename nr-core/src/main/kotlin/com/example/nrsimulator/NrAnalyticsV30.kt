@@ -1,0 +1,5 @@
+package com.example.nrsimulator
+import kotlin.math.*
+data class NrAnalyticsV30Input(val throughputMbps:Double,val goodputMbps:Double,val sinrDb:Double,val bler:Double,val latencyMs:Double,val usedPrbs:Int,val totalPrbs:Int,val retransmissions:Int)
+data class NrAnalyticsV30Result(val spectralEfficiency:Double,val prbUtilization:Double,val reliabilityPercent:Double,val retransmissionRate:Double,val latencyMs:Double,val score:Double,val pass:Boolean,val note:String)
+class NrAnalyticsV30 { fun run(x:NrAnalyticsV30Input):NrAnalyticsV30Result { val se=x.throughputMbps/(x.totalPrbs.coerceAtLeast(1)*.014);val util=100.0*x.usedPrbs/x.totalPrbs.coerceAtLeast(1);val rel=100.0*(1.0-x.bler.coerceIn(0.0,1.0));val rr=x.retransmissions.toDouble()/(x.retransmissions+100).coerceAtLeast(1);val score=(.35*min(100.0,se*10)+.25*util+.25*rel+.15*max(0.0,100-x.latencyMs*5)).coerceIn(0.0,100.0);return NrAnalyticsV30Result(se,util,rel,rr,x.latencyMs,score,true,"System-level analytics layer; metrics are normalized for simulator comparison and visualization.") } }

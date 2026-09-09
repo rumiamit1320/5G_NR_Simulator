@@ -1,0 +1,61 @@
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/AdvancedDsp.kt:43:9: warning: parameter 'modulationOrder' is never used
+        modulationOrder: Int,
+        ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/AdvancedDsp.kt:72:17: warning: variable 'evm' is never used
+            val evm = evmFromSnr(snrs[i], channel)
+                ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/AdvancedDsp.kt:157:17: warning: variable 'v' initializer is redundant
+        var v = 0.0
+                ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/Dsp.kt:34:123: warning: variable 'v' initializer is redundant
+        val p=x.map{it.abs2()}.average(); val np=p/10.0.pow(snrDb/10.0); val s=sqrt(np/2); fun g():Double{var u=0.0;var v=0.0;while(u==0.0)u=r.nextDouble();v=r.nextDouble();return sqrt(-2*ln(u))*cos(2*PI*v)}; return Array(x.size){x[it]+Complex(g()*s,g()*s)}
+                                                                                                                          ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/Dsp.kt:42:78: warning: parameter 'durationMs' is never used
+    fun run(scsKhz:Int, nRb:Int, order:Int, snr:Double, bandwidthMHz:Double, durationMs:Double):SimResult {
+                                                                             ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/Dsp.kt:43:46: warning: variable 'bps' is never used
+        val r=Random(System.nanoTime()); val bps=log2(order.toDouble()).roundToInt(); val n=256; val raw=Dsp.bits(2048,r); val tx=Dsp.qam(raw,order); val grid=Array(n){Complex(0.0,0.0)}; tx.take(n/2-1).forEachIndexed{idx,z->grid[idx+1]=z}; tx.take(n/2-1).forEachIndexed{idx,z->grid[n/2+1+idx]=z}; val td=Dsp.fft(grid,true); val rxTd=Dsp.addAwgn(td,snr,r); val rxFd=Dsp.fft(rxTd); val rx=Array(tx.size){rxFd[(it%(n-2))+if((it%(n-2))<(n/2-1))1 else 2]}; val evm=Dsp.evm(tx.take(rx.size).toTypedArray(),rx); val ber=(0.5*10.0.pow(-snr/10.0)).coerceIn(0.0,0.5); val symRate=(scsKhz*1000.0*14.0*nRb); val thr=bandwidthMHz*1e6*(log2(order.toDouble()))*0.75*(1-0.14)/1e6; return SimResult(raw.size,tx.size,snr,evm,thr,ber,tx.take(80).toTypedArray(),rx.take(80).toTypedArray())
+                                             ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/Dsp.kt:43:563: warning: variable 'symRate' is never used
+        val r=Random(System.nanoTime()); val bps=log2(order.toDouble()).roundToInt(); val n=256; val raw=Dsp.bits(2048,r); val tx=Dsp.qam(raw,order); val grid=Array(n){Complex(0.0,0.0)}; tx.take(n/2-1).forEachIndexed{idx,z->grid[idx+1]=z}; tx.take(n/2-1).forEachIndexed{idx,z->grid[n/2+1+idx]=z}; val td=Dsp.fft(grid,true); val rxTd=Dsp.addAwgn(td,snr,r); val rxFd=Dsp.fft(rxTd); val rx=Array(tx.size){rxFd[(it%(n-2))+if((it%(n-2))<(n/2-1))1 else 2]}; val evm=Dsp.evm(tx.take(rx.size).toTypedArray(),rx); val ber=(0.5*10.0.pow(-snr/10.0)).coerceIn(0.0,0.5); val symRate=(scsKhz*1000.0*14.0*nRb); val thr=bandwidthMHz*1e6*(log2(order.toDouble()))*0.75*(1-0.14)/1e6; return SimResult(raw.size,tx.size,snr,evm,thr,ber,tx.take(80).toTypedArray(),rx.take(80).toTypedArray())
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/NrChannelV11.kt:105:17: warning: variable 'v' initializer is redundant
+        var v = 0.0
+                ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/NrConformanceV31Tests.kt:6:41: warning: variable 's' is never used
+        val rlc=NrRlcAmV31(); val (pdus,s)=rlc.segment(ByteArray(1500){it.toByte()},512); check(pdus.size==3); val (restored,st)=rlc.receive(pdus); check(restored.size==1500); check(st.ackSn==3); out += "RLC AM segmentation/reassembly: PASS"
+                                        ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/NrConformanceV7.kt:103:61: warning: parameter 'cb' is never used
+    private fun rateMatchIndices(ncb: Int, e: Int, rv: Int, cb: Int, c: Int): List<Int> {
+                                                            ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/NrConformanceV7.kt:103:70: warning: parameter 'c' is never used
+    private fun rateMatchIndices(ncb: Int, e: Int, rv: Int, cb: Int, c: Int): List<Int> {
+                                                                     ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/NrLdpcV5.kt:177:34: warning: parameter 'iterations' is never used
+    fun decode(llr: DoubleArray, iterations: Int): IntArray {
+                                 ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/NrLinkAdaptationV17.kt:134:67: warning: parameter 'table' is never used
+    private fun selectMcs(cqi: Int, sinr: Double, margin: Double, table: Int): NrMcsV17 {
+                                                                  ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/NrPdcchV33.kt:8:13: warning: parameter 'coreset' is never used
+    fun map(coreset:NrCoresetV33, aggregation:Int, candidate:Int):NrPdcchMappingV33 {
+            ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/NrPhyV11.kt:76:41: warning: parameter 'layer' is never used, could be renamed to _
+            val group = Array(layers) { layer ->
+                                        ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/NrPhyV12.kt:211:28: warning: parameter 'offset' is never used
+        rx: Int, nSc: Int, offset: Int
+                           ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/NrPhyV13.kt:242:28: warning: parameter 'offset' is never used
+        rx: Int, nSc: Int, offset: Int
+                           ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/NrPhyV3.kt:183:66: warning: variable 'v' initializer is redundant
+private fun Random.nextGaussian(): Double { var u = 0.0; var v = 0.0; while (u == 0.0) u = nextDouble(); v = nextDouble(); return sqrt(-2.0 * ln(u)) * cos(2.0 * PI * v) }
+                                                                 ^
+mnt/data/work5g/v30full/nr-core/src/main/kotlin/com/example/nrsimulator/NrTransportV6.kt:68:13: warning: variable 'tbCheck' is never used
+        val tbCheck = crc24A(tb.copyOfRange(0, a))
+            ^
+V31: PASS
+V32-V45: PASS
+V46-V60: PASS
+CORE_REGRESSION=PASS
