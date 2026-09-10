@@ -51,3 +51,17 @@ jobs:
           curl -fsS http://127.0.0.1:8080/lab.html >/tmp/lab.html
           grep -q '/lab.js' /tmp/lab.html
           echo 'Web API, parameterized V19-V30 lab, and full NR regression smoke tests passed.'
+          bash tools/validate_web_scenarios.sh
+          bash tools/validate_lab_visualizations.sh
+      - name: Package standalone web distribution
+        run: |
+          gradle :web-server:installDist --no-daemon
+          tar -C web-server/build/install -czf 5g-nr-simulator-web.tar.gz web-server
+      - name: Build deployment container
+        run: docker build --tag 5g-nr-simulator:web-ci .
+      - name: Upload standalone web package
+        uses: actions/upload-artifact@v4
+        with:
+          name: 5g-nr-simulator-web
+          path: 5g-nr-simulator-web.tar.gz
+          if-no-files-found: error
