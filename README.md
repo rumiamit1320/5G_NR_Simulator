@@ -54,9 +54,11 @@ Standalone JVM regression can be run through the Gradle `:nr-core` module when a
 
 ## Web simulator validation and deployment
 
-The web layer is additive: it calls the retained Kotlin reference engine rather than duplicating NR algorithms in JavaScript. The web CI now exercises four representative end-to-end parameter sets spanning low-SNR QPSK, mid-SNR 64-QAM, high-SNR 256-QAM, and a conservative 16-QAM case. The checks validate the JSON contract and finite primary metrics rather than asserting artificial monotonic behavior on stochastic channel models.
+The web layer is additive: it calls the retained Kotlin reference engine rather than duplicating NR algorithms in JavaScript. The web CI exercises representative end-to-end parameter sets spanning low-SNR QPSK, mid-SNR 64-QAM, high-SNR 256-QAM, and conservative 16-QAM. The checks validate the JSON contract and finite primary metrics rather than asserting artificial monotonic behavior on stochastic channel models.
 
-The V19–V60 laboratory also has an automated educational-visualization check. It verifies that the lab page, visualization renderer, explanatory "How to read it" text, V19/V30 visualizations, and V31–V60 extension are present, and that representative V19/V22/V29 API routes remain live.
+`tools/validate_parameter_sweep.sh` extends this into a repeatable boundary sweep covering SNR −5…35 dB, PRB/layer/MIMO extremes, MCS 0…27, SCS 15/30/60 kHz, and HARQ on/off. It also drives distinct inputs through the V49–V58 interactive boundaries and verifies their returned results. Deterministic relationships already represented by the retained `Simulator` are checked (notably BER versus SNR); parameters whose legacy model does not affect a metric are validated as configuration inputs rather than given artificial effects.
+
+The V19–V60 laboratory has an automated educational-visualization check. It verifies that the lab page, visualization renderer, explanatory "How to read it" text, V19/V30 visualizations, and V31–V60 extension are present, and that representative V19/V22/V29 API routes remain live. V49–V58 now expose their actual existing Kotlin model parameters through the web adapter while V44/V45/V59/V60 remain canonical reference vectors.
 
 For deployment, the web server can be packaged with:
 
@@ -65,4 +67,4 @@ gradle :web-server:installDist --no-daemon
 tar -C web-server/build/install -czf 5g-nr-simulator-web.tar.gz web-server
 ```
 
-A root `Dockerfile` builds the same `:web-server` distribution on JDK 17 and runs it as an unprivileged user on port 8080. CI builds the container and publishes the standalone distribution as a workflow artifact. This is deployment-ready packaging; no hosted production service or 3GPP certification claim is implied.
+A root `Dockerfile` builds the same `:web-server` distribution on JDK 17 and runs it as an unprivileged user on port 8080. CI builds the container, runs the scenario/visualization/parameter-sweep validations, and publishes the standalone distribution as a workflow artifact. This is deployment-ready packaging; no hosted production service or 3GPP certification claim is implied.
