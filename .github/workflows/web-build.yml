@@ -40,4 +40,13 @@ jobs:
           grep -q 'V19-V30 regression' /tmp/suite.json
           grep -q 'V32-V45 tests' /tmp/suite.json
           grep -q 'V46-V60 tests' /tmp/suite.json
-          echo 'Web API and full NR regression smoke tests passed.'
+          curl -fsS 'http://127.0.0.1:8080/api/lab?version=V19&snr=15&prbs=52&layers=2&mcs=16' >/tmp/v19.json
+          grep -q '"version":"V19"' /tmp/v19.json
+          grep -q '"parameterized":true' /tmp/v19.json
+          curl -fsS 'http://127.0.0.1:8080/api/lab?version=V22&snr=12&prbs=40&layers=4&mcs=16&ue=6' >/tmp/v22.json
+          grep -q '"version":"V22"' /tmp/v22.json
+          curl -fsS 'http://127.0.0.1:8080/api/lab?version=V29&prbs=52&layers=2' >/tmp/v29.json
+          grep -q '"version":"V29"' /tmp/v29.json
+          curl -fsS http://127.0.0.1:8080/lab.html >/tmp/lab.html
+          grep -q '/lab.js' /tmp/lab.html
+          echo 'Web API, parameterized V19-V30 lab, and full NR regression smoke tests passed.'
