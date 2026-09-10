@@ -3,52 +3,67 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>5G NR Simulator — Web Edition</title>
+  <meta name="theme-color" content="#080b11" />
+  <title>5G NR Simulator — Web Lab</title>
   <link rel="stylesheet" href="/app.css" />
 </head>
 <body>
-  <div class="shell">
-    <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">5G</div><div><b>NR SIMULATOR</b><span>Web Edition</span></div></div>
-      <nav>
-        <a class="active" href="#dashboard">Dashboard</a>
-        <a href="#phy">PHY Chain</a>
-        <a href="#mimo">MIMO / CSI</a>
-        <a href="#protocols">Protocols</a>
-        <a href="#conformance">Conformance</a>
-      </nav>
-      <div class="engine"><span class="dot"></span><div><b>Engine online</b><small>Kotlin reference core</small></div></div>
-    </aside>
-    <main>
-      <header class="topbar"><div><div class="eyebrow">5G NEW RADIO · SYSTEM LAB</div><h1>Real-time link &amp; system simulation</h1></div><button id="run" class="primary">RUN SIMULATION</button></header>
-      <section class="controls card" id="dashboard">
-        <div class="section-title"><div><span>01</span><h2>Link configuration</h2></div><div class="live"><i></i> LIVE</div></div>
-        <div class="control-grid">
-          <label>SNR <output id="snrOut">15 dB</output><input id="snr" type="range" min="-5" max="35" value="15"></label>
-          <label>PRBs <output id="prbOut">52</output><input id="prbs" type="range" min="10" max="106" value="52"></label>
-          <label>MCS <output id="mcsOut">16</output><input id="mcs" type="range" min="0" max="27" value="16"></label>
-          <label>UEs <output id="ueOut">4</output><input id="ue" type="range" min="1" max="16" value="4"></label>
-          <label>TX antennas <output id="txOut">4</output><input id="tx" type="range" min="1" max="4" value="4"></label>
-          <label>RX antennas <output id="rxOut">4</output><input id="rx" type="range" min="1" max="4" value="4"></label>
-        </div>
-        <div class="chips"><div class="chip-label">MODULATION</div><button data-mod="QPSK">QPSK</button><button data-mod="16-QAM">16-QAM</button><button class="selected" data-mod="64-QAM">64-QAM</button><button data-mod="256-QAM">256-QAM</button></div>
-        <div class="chips"><div class="chip-label">SCS</div><button data-scs="15">15 kHz</button><button class="selected" data-scs="30">30 kHz</button><button data-scs="60">60 kHz</button><label class="toggle"><input id="harq" type="checkbox" checked><span></span> HARQ</label></div>
-      </section>
-      <section class="metrics" id="metrics">
-        <div class="metric card"><span>THROUGHPUT</span><strong id="throughput">—</strong><small>Mbps</small></div>
-        <div class="metric card"><span>EVM</span><strong id="evm">—</strong><small>%</small></div>
-        <div class="metric card"><span>BER</span><strong id="ber">—</strong><small>bit error rate</small></div>
-        <div class="metric card"><span>SYMBOLS</span><strong id="symbols">—</strong><small>per simulation</small></div>
-      </section>
-      <section class="visual-grid">
-        <div class="card viz"><div class="section-title"><div><span>02</span><h2>Constellation</h2></div><small>TX / RX</small></div><canvas id="constellation"></canvas></div>
-        <div class="card viz"><div class="section-title"><div><span>03</span><h2>Resource grid</h2></div><small>12 subcarriers / PRB</small></div><canvas id="grid"></canvas></div>
-      </section>
-      <section class="card table-card" id="phy"><div class="section-title"><div><span>04</span><h2>PHY pipeline</h2></div><small>Reference engine outputs</small></div><div class="table-wrap"><table><thead><tr><th>Layer</th><th>Status</th><th>Reference result</th></tr></thead><tbody id="phyTable"></tbody></table></div></section>
-      <section class="card table-card" id="protocols"><div class="section-title"><div><span>05</span><h2>System stack</h2></div><small>MAC · RLC · PDCP · RRC · NAS · core</small></div><div id="stack" class="stack"></div></section>
-      <section class="card table-card" id="conformance"><div class="section-title"><div><span>06</span><h2>Conformance suite</h2></div><button id="suite" class="secondary">RUN FULL SUITE</button></div><div id="suiteOut" class="suite"></div></section>
-      <footer>5G NR Simulator · Web interface over the existing reference implementation · No simulator logic removed.</footer>
-    </main>
-  </div>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">5G</div><div><b>NR SIMULATOR</b><span>WEB SYSTEM LAB</span></div></div>
+    <nav>
+      <a class="active" href="#dashboard">Overview</a><a href="#phy">PHY chain</a><a href="#mimo">MIMO / CSI</a><a href="#protocols">Protocol stack</a><a href="#conformance">Conformance</a>
+    </nav>
+    <div class="engine"><span class="dot"></span><div><b>Reference engine</b><small>Kotlin nr-core · online</small></div></div>
+  </aside>
+  <main>
+    <header class="topbar">
+      <div><div class="eyebrow">5G NEW RADIO · INTERACTIVE SYSTEM LAB</div><h1>NR simulation workspace</h1><p class="subtitle">The web layer drives the existing reference implementation; Android simulation logic remains untouched.</p></div>
+      <div class="actions"><button id="reset" class="secondary">RESET</button><button id="export" class="secondary">EXPORT JSON</button><button id="run" class="primary">RUN SIMULATION</button></div>
+    </header>
+
+    <section class="controls card" id="dashboard">
+      <div class="section-title"><div><span>01</span><h2>Link configuration</h2></div><div class="live"><i></i> LIVE ENGINE</div></div>
+      <div class="control-grid">
+        <label>SNR <output id="snrOut">15 dB</output><input id="snr" type="range" min="-5" max="35" value="15"></label>
+        <label>PRBs <output id="prbOut">52</output><input id="prbs" type="range" min="1" max="106" value="52"></label>
+        <label>MCS <output id="mcsOut">16</output><input id="mcs" type="range" min="0" max="27" value="16"></label>
+        <label>UEs <output id="ueOut">4</output><input id="ue" type="range" min="1" max="16" value="4"></label>
+        <label>TX antennas <output id="txOut">4</output><input id="tx" type="range" min="1" max="4" value="4"></label>
+        <label>RX antennas <output id="rxOut">4</output><input id="rx" type="range" min="1" max="4" value="4"></label>
+      </div>
+      <div class="chips"><div class="chip-label">MODULATION</div><button data-mod="QPSK">QPSK</button><button data-mod="16-QAM">16-QAM</button><button class="selected" data-mod="64-QAM">64-QAM</button><button data-mod="256-QAM">256-QAM</button></div>
+      <div class="chips"><div class="chip-label">SCS</div><button data-scs="15">15 kHz</button><button class="selected" data-scs="30">30 kHz</button><button data-scs="60">60 kHz</button><label class="toggle"><input id="harq" type="checkbox" checked><span></span> HARQ</label></div>
+      <div class="advanced-grid">
+        <label>CHANNEL<select id="channel"><option value="RAYLEIGH">Rayleigh</option><option value="AWGN">AWGN</option><option value="RICIAN">Rician</option></select></label>
+        <label>SCHEDULER<select id="scheduler"><option value="PROPORTIONAL_FAIR">Proportional Fair</option><option value="ROUND_ROBIN">Round Robin</option></select></label>
+        <label>CODE RATE <output id="codingOut">0.75</output><input id="coding" type="range" min="0.10" max="0.99" step="0.01" value="0.75"></label>
+        <label>CARRIER <output id="carrierOut">3.5 GHz</output><input id="carrier" type="range" min="0.7" max="28" step="0.1" value="3.5"></label>
+        <label>VELOCITY <output id="velocityOut">30 km/h</output><input id="velocity" type="range" min="0" max="350" value="30"></label>
+        <label>EQUALIZER<select id="equalizer"><option value="MMSE">MMSE</option><option value="ZF">ZF</option></select></label>
+      </div>
+    </section>
+
+    <section class="metrics" id="metrics">
+      <div class="metric card"><span>THROUGHPUT</span><strong id="throughput">—</strong><small>Mbps</small></div><div class="metric card"><span>EVM</span><strong id="evm">—</strong><small>%</small></div><div class="metric card"><span>BER</span><strong id="ber">—</strong><small>bit error rate</small></div><div class="metric card"><span>SYMBOLS</span><strong id="symbols">—</strong><small>simulation output</small></div>
+    </section>
+
+    <section class="visual-grid">
+      <div class="card viz"><div class="section-title"><div><span>02</span><h2>Constellation</h2></div><small>TX / RX samples</small></div><canvas id="constellation"></canvas><div class="legend"><span><i class="tx-dot"></i>TX</span><span><i class="rx-dot"></i>RX</span></div></div>
+      <div class="card viz"><div class="section-title"><div><span>03</span><h2>NR resource grid</h2></div><small>14 OFDM symbols</small></div><canvas id="grid"></canvas></div>
+    </section>
+
+    <section class="card table-card" id="phy"><div class="section-title"><div><span>04</span><h2>PHY pipeline</h2></div><small>V3 → V18 reference outputs</small></div><div class="table-wrap"><table><thead><tr><th>LAYER</th><th>STATE</th><th>REFERENCE RESULT</th></tr></thead><tbody id="phyTable"></tbody></table></div></section>
+
+    <section class="card table-card" id="mimo"><div class="section-title"><div><span>05</span><h2>MIMO / CSI / channel</h2></div><small>V14–V18</small></div><div id="mimoCards" class="stack"></div></section>
+
+    <section class="card table-card" id="protocols"><div class="section-title"><div><span>06</span><h2>Integrated system stack</h2></div><small>V19–V30</small></div><div id="stack" class="stack"></div></section>
+
+    <section class="card table-card" id="conformance"><div class="section-title"><div><span>07</span><h2>Conformance &amp; regression</h2></div><button id="suite" class="secondary">RUN FULL SUITE</button></div><div class="suite-filter"><input id="suiteFilter" placeholder="Filter test layers…"><span id="suiteStatus">Ready</span></div><div id="suiteOut" class="suite"></div></section>
+
+    <footer><b>5G NR Simulator</b> · web interface over the existing Kotlin reference engine · no Android simulator logic removed · research/laboratory implementation.</footer>
+  </main>
+</div>
 <script src="/app.js"></script>
-</body></html>
+</body>
+</html>
