@@ -36,4 +36,8 @@ jobs:
           grep -q '"ok":true' /tmp/health.json
           curl -fsS 'http://127.0.0.1:8080/api/simulate?snr=15&prbs=52&mcs=16&ue=4&tx=4&rx=4&layers=2&mod=64-QAM&scs=30&harq=true' >/tmp/sim.json
           grep -q '"ok":true' /tmp/sim.json
-          echo 'Web API smoke tests passed.'
+          curl -fsS http://127.0.0.1:8080/api/full-suite >/tmp/suite.json
+          grep -q 'V19-V30 regression' /tmp/suite.json
+          grep -q 'V32-V45 tests' /tmp/suite.json
+          grep -q 'V46-V60 tests' /tmp/suite.json
+          echo 'Web API and full NR regression smoke tests passed.'
