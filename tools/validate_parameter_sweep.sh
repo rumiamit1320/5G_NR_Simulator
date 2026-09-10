@@ -39,9 +39,16 @@ for d in items:
     assert d.get('ok') is True
     assert all(finite(d,p) for p in ('primary.bits','primary.symbols','primary.snr','primary.evm','primary.throughputMbps','primary.ber'))
 
-# These relationships are deterministic in the existing Simulator model.
-assert items[0]['primary']['ber'] > items[1]['primary']['ber'] > items[2]['primary']['ber'] > items[3]['primary']['ber'], 'BER must decrease with SNR'
-assert items[3]['primary']['evm'] >= 0 and items[0]['primary']['evm'] >= 0
+# Simulator BER is explicitly defined as 0.5*10^(-SNR/10), clipped to [0, 0.5].
+# Validate that the API preserves that existing model instead of imposing a
+# statistical monotonicity assumption on a random waveform measurement.
+for d in items[:4]:
+    snr=float(d['primary']['snr'])
+    expected=max(0.0,min(0.5,0.5*10.0**(-snr/10.0)))
+    assert math.isclose(float(d['primary']['ber']), expected, rel_tol=1e-12, abs_tol=1e-15), (snr,d['primary']['ber'],expected)
+
+assert items[0]['primary']['ber'] > items[1]['primary']['ber'] > items[2]['primary']['ber'] > items[3]['primary']['ber']
+assert all(d['primary']['evm'] >= 0 for d in items)
 assert items[0]['config']['prbs']==1 and items[3]['config']['prbs']==106 and items[4]['config']['prbs']==106
 assert items[3]['config']['layers']==4 and items[3]['config']['scs']==60 and items[3]['config']['harq'] is False
 # Legacy Simulator throughput uses its explicit bandwidth argument; PRB/SCS are still validated as configuration inputs.
