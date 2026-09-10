@@ -40,7 +40,6 @@ private fun simulation(exchange: HttpExchange) {
     val harq = q(exchange, "harq", "true").toBoolean()
     val tick = q(exchange, "tick", "0").toLongOrNull() ?: 0L
     val qm = when (order) { 4 -> 2; 16 -> 4; 64 -> 6; else -> 8 }
-
     val base = Simulator().run(scs, prbs, order, snr, 20.0, 1.0)
     val sys = AdvancedSimulator().run(ue, prbs, order, snr, ChannelModel.RAYLEIGH, Scheduler.PROPORTIONAL_FAIR, tx, rx, coding, harq, tick)
     val phy3 = NrPhyV3().run(NrPhyConfig(mcs = mcs, layers = layers, snrDb = snr, prbs = prbs))
@@ -64,12 +63,7 @@ private fun simulation(exchange: HttpExchange) {
     val stack = NrSystemStackV23V30().run()
     val pts = base.constellation.take(96).joinToString(",", prefix = "[", postfix = "]") { "[${it.re},${it.im}]" }
     val rxs = base.rx.take(96).joinToString(",", prefix = "[", postfix = "]") { "[${it.re},${it.im}]" }
-    val body = """
-        {"ok":true,"config":{"snr":$snr,"prbs":$prbs,"scs":$scs,"mod":"${esc(mod)}","ue":$ue,"tx":$tx,"rx":$rx,"mcs":$mcs,"layers":$layers,"codingRate":$coding,"harq":$harq},
-        "primary":{"bits":${base.bits},"symbols":${base.symbols},"snr":${base.snr},"evm":${base.evm},"throughputMbps":${base.throughputMbps},"ber":${base.ber},"constellation":$pts,"rx":$rxs},
-        "phy":{"v3":"${esc(phy3.toString())}","v4":"${esc(phy4.toString())}","v5":"${esc(ldpc5.toString())}","v6":"${esc(transport6.toString())}","v7":"${esc(conf7.toString())}","v8":"${esc(ldpc8.toString())}","v9":"${esc(transport9.toString())}","v10":"${esc(ofdm10.toString())}","v11":"${esc(phy11.toString())}","v12":"${esc(phy12.toString())}","v13":"${esc(phy13.toString())}"},
-        "advanced":{"system":"${esc(sys.toString())}","csi":"${esc(csi.toString())}","mimo":"${esc(mimo.toString())}","channel":"${esc(channel.toString())}","linkAdaptation":"${esc(adaptation.toString())}","pdcch":"${esc(pdcch.toString())}","stack":"${esc(stack.toString())}","e2e":"${esc(e2e.toString())}"}}
-    """.trimIndent()
+    val body = """{"ok":true,"config":{"snr":$snr,"prbs":$prbs,"scs":$scs,"mod":"${esc(mod)}","ue":$ue,"tx":$tx,"rx":$rx,"mcs":$mcs,"layers":$layers,"codingRate":$coding,"harq":$harq},"primary":{"bits":${base.bits},"symbols":${base.symbols},"snr":${base.snr},"evm":${base.evm},"throughputMbps":${base.throughputMbps},"ber":${base.ber},"constellation":$pts,"rx":$rxs},"phy":{"v3":"${esc(phy3.toString())}","v4":"${esc(phy4.toString())}","v5":"${esc(ldpc5.toString())}","v6":"${esc(transport6.toString())}","v7":"${esc(conf7.toString())}","v8":"${esc(ldpc8.toString())}","v9":"${esc(transport9.toString())}","v10":"${esc(ofdm10.toString())}","v11":"${esc(phy11.toString())}","v12":"${esc(phy12.toString())}","v13":"${esc(phy13.toString())}"},"advanced":{"system":"${esc(sys.toString())}","csi":"${esc(csi.toString())}","mimo":"${esc(mimo.toString())}","channel":"${esc(channel.toString())}","linkAdaptation":"${esc(adaptation.toString())}","pdcch":"${esc(pdcch.toString())}","stack":"${esc(stack.toString())}","e2e":"${esc(e2e.toString())}"}}"""
     json(exchange, body)
 }
 
@@ -129,6 +123,7 @@ fun main() {
     val server = HttpServer.create(InetSocketAddress("0.0.0.0", port), 0)
     server.createContext("/api/simulate") { ex -> runCatching { simulation(ex) }.onFailure { json(ex, "{\"ok\":false,\"error\":\"${esc(it.message ?: "simulation failed")}\"}", 500) } }
     server.createContext("/api/full-suite") { ex -> runCatching { fullSuite(ex) }.onFailure { json(ex, "{\"ok\":false,\"error\":\"${esc(it.message ?: "suite failed")}\"}", 500) } }
+    server.createContext("/api/lab") { ex -> runCatching { LabApi.handle(ex) }.onFailure { json(ex, "{\"ok\":false,\"error\":\"${esc(it.message ?: "lab failed")}\"}", 400) } }
     server.createContext("/api/health") { ex -> json(ex, "{\"ok\":true,\"engine\":\"Kotlin NR reference engine\"}") }
     server.createContext("/") { ex -> runCatching { static(ex) }.onFailure { json(ex, "{\"ok\":false,\"error\":\"${esc(it.message ?: "static failed")}\"}", 500) } }
     server.executor = Executors.newFixedThreadPool(8)
