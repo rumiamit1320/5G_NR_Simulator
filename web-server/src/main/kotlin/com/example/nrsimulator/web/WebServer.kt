@@ -86,6 +86,7 @@ private fun fullSuite(exchange: HttpExchange) {
         "V15 MIMO" to runCatching { NrMimoV15().run(NrMimoV15Config()) },
         "V17 link adaptation" to runCatching { NrLinkAdaptationV17().run(NrLinkAdaptationV17Config()) },
         "V18 PDCCH" to runCatching { NrPdcchV18().run() },
+        "V19-V30 regression" to runCatching { NrV19V30Tests.runAll() },
         "V23-V30 system stack" to runCatching { NrSystemStackV23V30().run() },
         "V30 end-to-end" to runCatching { NrEndToEndV30().run() },
         "V31 conformance" to runCatching { NrV31ConformanceTests.run() },
@@ -94,7 +95,13 @@ private fun fullSuite(exchange: HttpExchange) {
     )
     val body = results.joinToString(",", prefix = "{\"ok\":true,\"suite\":[", postfix = "]}") { (name, r) ->
         val value = r.fold({ esc(it.toString()) }, { "ERROR: ${esc(it.message ?: it.javaClass.simpleName)}" })
-        "{\"name\":\"${esc(name)}\",\"result\":\"$value\",\"pass\":${!value.startsWith("ERROR:")}}"
+        val passed = when (val result = r.getOrNull()) {
+            is NrV31ConformanceResult -> result.pass
+            is NrV46V60Result -> result.pass
+            is List<*> -> result.isNotEmpty() && result.all { !it.toString().contains("FAIL") }
+            else -> !value.startsWith("ERROR:")
+        }
+        "{\"name\":\"${esc(name)}\",\"result\":\"$value\",\"pass\":$passed}"
     }
     json(exchange, body)
 }
