@@ -15,7 +15,6 @@ private fun q(exchange: HttpExchange, key: String, fallback: String): String {
         if (p.size == 2 && URLDecoder.decode(p[0], "UTF-8") == key) URLDecoder.decode(p[1], "UTF-8") else null
     }.firstOrNull() ?: fallback
 }
-
 private fun esc(v: String): String = v.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
 private fun json(exchange: HttpExchange, body: String, code: Int = 200) {
     val bytes = body.toByteArray(StandardCharsets.UTF_8)
@@ -25,22 +24,12 @@ private fun json(exchange: HttpExchange, body: String, code: Int = 200) {
     exchange.sendResponseHeaders(code, bytes.size.toLong())
     exchange.responseBody.use { it.write(bytes) }
 }
-private fun text(exchange: HttpExchange, body: String, type: String) {
-    val bytes = body.toByteArray(StandardCharsets.UTF_8)
-    exchange.responseHeaders.add("Content-Type", type)
-    exchange.sendResponseHeaders(200, bytes.size.toLong())
-    exchange.responseBody.use { it.write(bytes) }
-}
 
 private fun simulation(exchange: HttpExchange) {
     val snr = q(exchange, "snr", "15").toDoubleOrNull()?.coerceIn(-10.0, 40.0) ?: 15.0
     val prbs = q(exchange, "prbs", "52").toIntOrNull()?.coerceIn(1, 106) ?: 52
-    val order = when (q(exchange, "mod", "64-QAM")) {
-        "QPSK" -> 4
-        "16-QAM" -> 16
-        "256-QAM" -> 256
-        else -> 64
-    }
+    val mod = q(exchange, "mod", "64-QAM")
+    val order = when (mod) { "QPSK" -> 4; "16-QAM" -> 16; "256-QAM" -> 256; else -> 64 }
     val scs = q(exchange, "scs", "30").toIntOrNull()?.let { if (it == 15 || it == 30 || it == 60) it else 30 } ?: 30
     val ue = q(exchange, "ue", "4").toIntOrNull()?.coerceIn(1, 16) ?: 4
     val tx = q(exchange, "tx", "4").toIntOrNull()?.coerceIn(1, 4) ?: 4
@@ -73,11 +62,10 @@ private fun simulation(exchange: HttpExchange) {
     val pdcch = NrPdcchV18().run(rnti = 0x1234, bwpPrbs = prbs, slot = tick.toInt(), dci = NrDciV18(frequencyDomainAssignment = (prbs / 4).coerceAtLeast(1), mcs = adaptation.selectedMcs, rv = adaptation.rvHistory.firstOrNull() ?: 0, harqProcess = tick.toInt() and 15, layers = adaptation.rank.coerceIn(1, 4)), aggregationLevel = 4, candidateIndex = 0)
     val e2e = NrEndToEndV30().run(NrEndToEndConfigV30(ueCount = ue.coerceIn(1, 4), prbs = prbs.coerceAtMost(52), scsKHz = scs, snrDb = snr, layers = layers.coerceIn(1, 2), frames = 1, slotsPerFrame = 2, payloadBytesPerUe = 1024, harqEnabled = harq))
     val stack = NrSystemStackV23V30().run()
-
     val pts = base.constellation.take(96).joinToString(",", prefix = "[", postfix = "]") { "[${it.re},${it.im}]" }
     val rxs = base.rx.take(96).joinToString(",", prefix = "[", postfix = "]") { "[${it.re},${it.im}]" }
     val body = """
-        {"ok":true,"config":{"snr":$snr,"prbs":$prbs,"scs":$scs,"mod":"${esc(q(exchange,"mod","64-QAM"))}","ue":$ue,"tx":$tx,"rx":$rx,"mcs":$mcs,"layers":$layers,"codingRate":$coding,"harq":$harq},
+        {"ok":true,"config":{"snr":$snr,"prbs":$prbs,"scs":$scs,"mod":"${esc(mod)}","ue":$ue,"tx":$tx,"rx":$rx,"mcs":$mcs,"layers":$layers,"codingRate":$coding,"harq":$harq},
         "primary":{"bits":${base.bits},"symbols":${base.symbols},"snr":${base.snr},"evm":${base.evm},"throughputMbps":${base.throughputMbps},"ber":${base.ber},"constellation":$pts,"rx":$rxs},
         "phy":{"v3":"${esc(phy3.toString())}","v4":"${esc(phy4.toString())}","v5":"${esc(ldpc5.toString())}","v6":"${esc(transport6.toString())}","v7":"${esc(conf7.toString())}","v8":"${esc(ldpc8.toString())}","v9":"${esc(transport9.toString())}","v10":"${esc(ofdm10.toString())}","v11":"${esc(phy11.toString())}","v12":"${esc(phy12.toString())}","v13":"${esc(phy13.toString())}"},
         "advanced":{"system":"${esc(sys.toString())}","csi":"${esc(csi.toString())}","mimo":"${esc(mimo.toString())}","channel":"${esc(channel.toString())}","linkAdaptation":"${esc(adaptation.toString())}","pdcch":"${esc(pdcch.toString())}","stack":"${esc(stack.toString())}","e2e":"${esc(e2e.toString())}"}}
@@ -111,12 +99,31 @@ private fun fullSuite(exchange: HttpExchange) {
     json(exchange, body)
 }
 
+private fun static(exchange: HttpExchange) {
+    val requested = exchange.requestURI.path.removePrefix("/").ifBlank { "index.html" }
+    if (requested.contains("..")) { json(exchange, "{\"ok\":false,\"error\":\"invalid path\"}", 400); return }
+    val path = "static/$requested"
+    val data = Thread.currentThread().contextClassLoader.getResourceAsStream(path)?.use { it.readBytes() }
+        ?: Thread.currentThread().contextClassLoader.getResourceAsStream("static/index.html")?.use { it.readBytes() }
+        ?: run { json(exchange, "{\"ok\":false,\"error\":\"not found\"}", 404); return }
+    val type = when {
+        requested.endsWith(".css") -> "text/css; charset=utf-8"
+        requested.endsWith(".js") -> "application/javascript; charset=utf-8"
+        requested.endsWith(".html") -> "text/html; charset=utf-8"
+        else -> "application/octet-stream"
+    }
+    exchange.responseHeaders.add("Content-Type", type)
+    exchange.sendResponseHeaders(200, data.size.toLong())
+    exchange.responseBody.use { it.write(data) }
+}
+
 fun main() {
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
     val server = HttpServer.create(InetSocketAddress("0.0.0.0", port), 0)
     server.createContext("/api/simulate") { ex -> runCatching { simulation(ex) }.onFailure { json(ex, "{\"ok\":false,\"error\":\"${esc(it.message ?: "simulation failed")}\"}", 500) } }
     server.createContext("/api/full-suite") { ex -> runCatching { fullSuite(ex) }.onFailure { json(ex, "{\"ok\":false,\"error\":\"${esc(it.message ?: "suite failed")}\"}", 500) } }
     server.createContext("/api/health") { ex -> json(ex, "{\"ok\":true,\"engine\":\"Kotlin NR reference engine\"}") }
+    server.createContext("/") { ex -> runCatching { static(ex) }.onFailure { json(ex, "{\"ok\":false,\"error\":\"${esc(it.message ?: "static failed")}\"}", 500) } }
     server.executor = Executors.newFixedThreadPool(8)
     server.start()
     println("5G NR Web Simulator listening on http://0.0.0.0:$port")
