@@ -53,6 +53,7 @@ jobs:
           echo 'Web API, parameterized V19-V30 lab, and full NR regression smoke tests passed.'
           bash tools/validate_web_scenarios.sh
           bash tools/validate_lab_visualizations.sh
+          bash tools/validate_parameter_sweep.sh
       - name: Package standalone web distribution
         run: |
           gradle :web-server:installDist --no-daemon
