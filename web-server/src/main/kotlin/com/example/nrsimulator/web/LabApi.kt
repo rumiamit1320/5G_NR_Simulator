@@ -96,10 +96,92 @@ object LabApi {
                 "V46" -> { val n=q(exchange,"payloadBits","100").toIntOrNull()?.coerceIn(1,100000)?:100; val r=NrLdpcV46.build(bits(n),q(exchange,"transportBits","200").toIntOrNull()?.coerceAtLeast(n)?:200); ok("blocks=${count(r.codeBlocks)}, tbCrcBits=${r.tbCrcBits}", false) }
                 "V47" -> { val n=q(exchange,"payloadBits","8").toIntOrNull()?.coerceIn(1,1000)?:8; val c=NrPolarV47.encode(bits(n),q(exchange,"encodedBits","16").toIntOrNull()?.coerceAtLeast(n)?:16); ok("encoded=${count(c)}, roundTrip=${NrPolarV47.decode(c,n).contentEquals(bits(n))}", false) }
                 "V48" -> { val p=NrPdcchV48.encode(bits(q(exchange,"bits","16").toIntOrNull()?.coerceIn(1,10000)?:16),q(exchange,"rnti","4660").toIntOrNull()?:0x1234,q(exchange,"aggregation","4").toIntOrNull()?.coerceIn(1,16)?:4); ok("QPSK=${count(p.qpsk)}", false) }
-                "V49" -> ok("interactive resource-grid parameters accepted; canonical V49 execution remains authoritative", false)
-                "V50" -> ok("SCS=${q(exchange,"scs","30")} kHz; canonical numerology execution remains authoritative", false)
-                "V51" -> ok("ACK=${q(exchange,"ack","false")}; canonical HARQ execution remains authoritative", false)
-                "V52", "V53", "V54", "V55", "V56", "V57", "V58" -> ok("interactive adapter parameters accepted; canonical reference execution remains authoritative", false)
+                "V49" -> {
+                    val gridPrbs=q(exchange,"rbCount","24").toIntOrNull()?.coerceIn(1,275)?:24
+                    val start=q(exchange,"startRb","0").toIntOrNull()?.coerceIn(0,gridPrbs-1)?:0
+                    val span=q(exchange,"rbReserve","4").toIntOrNull()?.coerceIn(1,gridPrbs-start)?:minOf(4,gridPrbs-start)
+                    val symbols=q(exchange,"symbolCount","2").toIntOrNull()?.coerceIn(1,14)?:2
+                    val layer=q(exchange,"layer","0").toIntOrNull()?.coerceIn(0,layers-1)?:0
+                    val channel=q(exchange,"channel","PDSCH").uppercase().let { runCatching { NrChannelV49.valueOf(it) }.getOrDefault(NrChannelV49.PDSCH) }
+                    val g=NrResourceGridV49(gridPrbs,layers=layers)
+                    val reserved=g.reserve(channel,0,0,symbols,start,start+span,layer)
+                    ok("gridPrbs=$gridPrbs, symbols=$symbols, rbStart=$start, rbSpan=$span, layer=$layer, reserved=$reserved, used=${g.usedCount()}")
+                }
+                "V50" -> {
+                    val scs=q(exchange,"scs","30").toIntOrNull()?.let { NrScsV50.entries.firstOrNull { e -> e.khz==it } } ?: NrScsV50.SCS30
+                    val slot=q(exchange,"slot","0").toIntOrNull()?.coerceAtLeast(0)?:0
+                    val start=q(exchange,"startRb","0").toIntOrNull()?.coerceAtLeast(0)?:0
+                    val size=q(exchange,"rbCount",prbs.toString()).toIntOrNull()?.coerceAtLeast(1)?:prbs
+                    val valid=NrNumerologyV50.validate(NrBwpV50(start,size,scs),prbs.coerceAtLeast(start+size))
+                    val t=NrNumerologyV50.timing(scs,slot)
+                    ok("scs=${scs.khz}kHz, slot=$slot, slotsPerFrame=${t.slotsPerFrame}, symbols=${t.symbolsPerSlot}, slotDurationUs=${t.slotDurationUs}, bwpValid=$valid")
+                }
+                "V51" -> {
+                    val ack=q(exchange,"ack","false").toBoolean()
+                    val id=q(exchange,"process","0").toIntOrNull()?.coerceIn(0,15)?:0
+                    val ndi=q(exchange,"ndi","1").toIntOrNull()?.coerceIn(0,1)?:1
+                    val initial=NrHarqV51.start(NrHarqProcessV51(id),ndi)
+                    val after=NrHarqV51.feedback(initial,ack)
+                    ok("process=$id, ack=$ack, ndi=$ndi, state=${after.state}, rv=${after.rv}, txCount=${after.txCount}, soft=${after.soft}")
+                }
+                "V52" -> {
+                    val payload=q(exchange,"payloadBytes","100").toIntOrNull()?.coerceIn(1,1_000_000)?:100
+                    val budget=q(exchange,"pduBytes",payload.toString()).toIntOrNull()?.coerceIn(1,1_000_000)?:payload
+                    val priority=q(exchange,"priority","1").toIntOrNull()?.coerceIn(0,255)?:1
+                    val lcg=q(exchange,"lcg","0").toIntOrNull()?.coerceIn(0,7)?:0
+                    val p=NrMacV52.multiplex(listOf(NrLogicalChannelV52(1,priority,lcg,payload)),listOf(NrMacCeV52.BSR),budget)
+                    ok("budget=$budget, requested=$payload, priority=$priority, lcg=$lcg, payloadBytes=${p.payloadBytes}, channels=${p.channels.size}, bsr=${NrMacV52.bsr(p.channels)}")
+                }
+                "V53" -> {
+                    val payload=bytes(q(exchange,"payloadBytes","2").toIntOrNull()?.coerceIn(1,1_000_000)?:2)
+                    val mode=q(exchange,"mode","AM").uppercase().let { runCatching { NrRlcModeV53.valueOf(it) }.getOrDefault(NrRlcModeV53.AM) }
+                    val snBits=q(exchange,"snBits","12").toIntOrNull()?.coerceIn(5,18)?:12
+                    val entity=NrRlcEntityV53(mode=mode,snBits=snBits)
+                    val (next,pdu)=NrRlcV53.transmit(entity,payload)
+                    ok("mode=$mode, snBits=$snBits, sn=${pdu.sn}, payload=${count(pdu.payload)}, nextTxSn=${next.txSn}, timer=${next.timer}")
+                }
+                "V54" -> {
+                    val payload=bytes(q(exchange,"payloadBytes","2").toIntOrNull()?.coerceIn(1,1_000_000)?:2)
+                    val sn=q(exchange,"sn","0").toIntOrNull()?.coerceIn(0,4095)?:0
+                    val hfn=q(exchange,"hfn","0").toIntOrNull()?.coerceAtLeast(0)?:0
+                    val bearer=q(exchange,"bearer","1").toIntOrNull()?.coerceIn(0,31)?:1
+                    val dir=q(exchange,"direction","0").toIntOrNull()?.coerceIn(0,1)?:0
+                    val key=ByteArray(16){it.toByte()}
+                    val p=NrPdcpV54.protect(key,payload,NrPdcpV54.count(sn,hfn),bearer,dir)
+                    ok("sn=$sn, hfn=$hfn, bearer=$bearer, direction=$dir, count=${p.count.count}, protected=${count(p.payload)}, verified=${NrPdcpV54.verify(key,p,bearer,dir)?.contentEquals(payload)==true}")
+                }
+                "V55" -> {
+                    val tid=q(exchange,"transactionId","1").toIntOrNull()?.coerceIn(0,3)?:1
+                    val payload=bytes(q(exchange,"payloadBytes","1").toIntOrNull()?.coerceIn(0,65531)?:1)
+                    val type=q(exchange,"type","SETUP").uppercase().let { runCatching { NrRrcMessageTypeV55.valueOf(it) }.getOrDefault(NrRrcMessageTypeV55.SETUP) }
+                    val decoded=NrRrcV55.decode(NrRrcV55.encode(NrRrcPduV55(type,tid,payload)))
+                    ok("type=${decoded.type}, transactionId=${decoded.transactionId}, payload=${count(decoded.criticalExtensions)}, roundTrip=${decoded.criticalExtensions.contentEquals(payload)}")
+                }
+                "V56" -> {
+                    val supi=q(exchange,"supi",q(exchange,"plmn","001")+"0000001")
+                    val procedure=q(exchange,"procedure","REGISTRATION").uppercase().let { runCatching { NrNasProcedureV56.valueOf(it) }.getOrDefault(NrNasProcedureV56.REGISTRATION) }
+                    val ksi=q(exchange,"ksi","0").toIntOrNull()?.coerceIn(0,7)?:0
+                    val c=NrNasContextV56(supi=supi,ksi=ksi)
+                    val next=NrNasV56.step(c,procedure)
+                    ok("supi=$supi, procedure=$procedure, state=${next.state}, ksi=${next.ksi}, count=${next.count}")
+                }
+                "V57" -> {
+                    val teid=q(exchange,"teid","1").toLongOrNull()?.coerceIn(0,0xffffffffL)?:1L
+                    val seq=q(exchange,"seq","0").toIntOrNull()?.coerceIn(0,65535)?:0
+                    val qfi=q(exchange,"qfi","9").toIntOrNull()?.coerceIn(0,63)?:9
+                    val payload=bytes(q(exchange,"payloadBytes","1").toIntOrNull()?.coerceIn(1,1_000_000)?:1)
+                    val decoded=NrGtpV57.decode(NrGtpV57.encode(NrGtpPacketV57(teid,seq,payload,qfi)))
+                    ok("teid=${decoded.teid}, seq=${decoded.seq}, qfi=${decoded.qfi}, payload=${count(decoded.payload)}, roundTrip=${decoded.payload.contentEquals(payload)}")
+                }
+                "V58" -> {
+                    val ue=q(exchange,"ue","u1").take(128).ifBlank { "u1" }
+                    val payload=bytes(q(exchange,"payloadBytes","1").toIntOrNull()?.coerceIn(1,1_000_000)?:1)
+                    val plane=q(exchange,"plane","F1_U").uppercase().let { runCatching { NrSplitPlaneV58.valueOf(it) }.getOrDefault(NrSplitPlaneV58.F1_U) }
+                    val adapter=NrLoopbackSplitV58()
+                    val sent=adapter.send(NrSplitMessageV58(plane,ue,payload))
+                    val received=adapter.received.lastOrNull()
+                    ok("ue=$ue, plane=$plane, payload=${count(payload)}, sent=$sent, received=${received?.ueId==ue && received?.payload?.contentEquals(payload)==true}")
+                }
                 "V59" -> ok(NrConformanceV59.run(),false)
                 "V60" -> ok(NrComplianceV60.matrix(),false)
                 else -> throw IllegalArgumentException("Unsupported lab version: $version")
