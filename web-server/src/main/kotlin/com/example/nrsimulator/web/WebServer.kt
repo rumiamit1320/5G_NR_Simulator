@@ -3,6 +3,7 @@ package com.example.nrsimulator.web
 import com.example.nrsimulator.*
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -22,7 +23,14 @@ private fun json(exchange: HttpExchange, body: String, code: Int = 200) {
     exchange.responseHeaders.add("Cache-Control", "no-store")
     exchange.responseHeaders.add("Access-Control-Allow-Origin", "*")
     exchange.sendResponseHeaders(code, bytes.size.toLong())
-    exchange.responseBody.use { it.write(bytes) }
+    val response = exchange.responseBody
+    try {
+        response.write(bytes)
+    } catch (_: IOException) {
+        // The response may already have reached the client when the socket closes.
+    } finally {
+        try { response.close() } catch (_: IOException) { }
+    }
 }
 
 private fun simulation(exchange: HttpExchange) {
