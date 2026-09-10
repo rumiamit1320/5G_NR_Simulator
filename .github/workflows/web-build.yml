@@ -23,3 +23,17 @@ jobs:
         run: gradle :web-server:build
       - name: Smoke test application classes
         run: gradle :web-server:classes
+      - name: Smoke test HTTP API
+        shell: bash
+        run: |
+          gradle :web-server:run > web-server.log 2>&1 &
+          PID=$!
+          trap 'kill $PID || true' EXIT
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8080/api/health >/tmp/health.json; then break; fi
+            sleep 1
+          done
+          grep -q '"ok":true' /tmp/health.json
+          curl -fsS 'http://127.0.0.1:8080/api/simulate?snr=15&prbs=52&mcs=16&ue=4&tx=4&rx=4&layers=2&mod=64-QAM&scs=30&harq=true' >/tmp/sim.json
+          grep -q '"ok":true' /tmp/sim.json
+          echo 'Web API smoke tests passed.'
