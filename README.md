@@ -30,7 +30,6 @@ The architecture is aligned with the NR overall description and RRC layering rep
 ## V31 conformance foundation
 V31 is additive and leaves V1-V30 APIs intact. It adds exact low-level NR/security primitives (38.211 Gold sequence, CRC24C, 128-NEA2, 128-NIA2), an RLC AM state foundation, and an RRC transaction/configuration foundation. This is a conformance-enabling layer, not a claim of complete 3GPP certification.
 
-
 ### V32–V45 Conformance Expansion
 
 The project now contains additive V32–V45 modules. They preserve the existing V1–V31 architecture and expose isolated adapters/foundations rather than rewriting the existing simulator. V45 is a certification gate and intentionally remains closed until external normative test evidence is available.
@@ -52,3 +51,18 @@ The V1–V60 implementation is now organized so the existing Android application
 - `nr-core/src/test/.../CoreRegressionMain.kt` — standalone regression entry point.
 
 Standalone JVM regression can be run through the Gradle `:nr-core` module when a Gradle installation/wrapper is available. In the current environment, the equivalent JVM compilation was executed directly with `kotlinc` and produced `CORE_REGRESSION=PASS`.
+
+## Web simulator validation and deployment
+
+The web layer is additive: it calls the retained Kotlin reference engine rather than duplicating NR algorithms in JavaScript. The web CI now exercises four representative end-to-end parameter sets spanning low-SNR QPSK, mid-SNR 64-QAM, high-SNR 256-QAM, and a conservative 16-QAM case. The checks validate the JSON contract and finite primary metrics rather than asserting artificial monotonic behavior on stochastic channel models.
+
+The V19–V60 laboratory also has an automated educational-visualization check. It verifies that the lab page, visualization renderer, explanatory "How to read it" text, V19/V30 visualizations, and V31–V60 extension are present, and that representative V19/V22/V29 API routes remain live.
+
+For deployment, the web server can be packaged with:
+
+```bash
+gradle :web-server:installDist --no-daemon
+tar -C web-server/build/install -czf 5g-nr-simulator-web.tar.gz web-server
+```
+
+A root `Dockerfile` builds the same `:web-server` distribution on JDK 17 and runs it as an unprivileged user on port 8080. CI builds the container and publishes the standalone distribution as a workflow artifact. This is deployment-ready packaging; no hosted production service or 3GPP certification claim is implied.
