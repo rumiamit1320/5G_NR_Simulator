@@ -2,6 +2,8 @@
   // Web-only controller. It does not modify or duplicate nr-core logic.
   const PARAM = new Set(Array.from({length: 12}, (_, i) => `V${19 + i}`));
   const value = id => document.getElementById(id)?.value ?? '';
+  const n = (card, key, fallback=0) => Number(card.querySelector(`[data-param="${key}"]`)?.value ?? fallback);
+  const checked = (card, key) => !!card.querySelector(`[data-param="${key}"]`)?.checked;
   const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   const field = (name, label, type='number', attrs='') =>
@@ -29,17 +31,16 @@
   function addStyles() {
     if (document.getElementById('lab-js-style')) return;
     const s = document.createElement('style'); s.id = 'lab-js-style';
-    s.textContent = `.labparams{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px;padding:8px;border:1px solid #1d2838;border-radius:8px;background:#080e16}.labfield{display:block;font-size:8px;color:#71809a}.labfield span{display:block;margin-bottom:3px}.labfield input,.labfield select{box-sizing:border-box;width:100%;padding:5px 6px;background:#0d141f;border:1px solid #263143;border-radius:5px;color:#dce7f8;font-size:9px}.labfield input[type=checkbox]{width:auto}.labhint{margin-top:7px;color:#68758b;font-size:8px;line-height:1.45}@media(max-width:650px){.labparams{grid-template-columns:1fr 1fr}}`;
+    s.textContent = `.labparams{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px;padding:8px;border:1px solid #1d2838;border-radius:8px;background:#080e16}.labfield{display:block;font-size:8px;color:#71809a}.labfield span{display:block;margin-bottom:3px}.labfield input,.labfield select{box-sizing:border-box;width:100%;padding:5px 6px;background:#0d141f;border:1px solid #263143;border-radius:5px;color:#dce7f8;font-size:9px}.labfield input[type=checkbox]{width:auto}.labhint{margin-top:7px;color:#68758b;font-size:8px;line-height:1.45}.viz{margin-top:9px;border:1px solid #1d2838;border-radius:8px;padding:8px;background:#080e16}.viztitle{font-size:9px;font-weight:700;color:#b9c8df;margin-bottom:6px}.viz svg{display:block;width:100%;height:auto;min-height:100px}.viznote{margin-top:6px;color:#7f8ca1;font-size:8px;line-height:1.5}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}.kpi{padding:7px;border:1px solid #202838;border-radius:6px}.kpi b{display:block;font-size:12px;color:#eaf1ff}.kpi span{font-size:7px;color:#71809a}@media(max-width:650px){.labparams{grid-template-columns:1fr 1fr}.kpis{grid-template-columns:1fr 1fr}}`;
     document.head.appendChild(s);
   }
 
   function getParams(card, version) {
-    const p = new URLSearchParams({ version });
+    const p = new URLSearchParams({version});
     card.querySelectorAll('[data-param]').forEach(el => {
       if (el.type === 'checkbox') p.set(el.dataset.param, el.checked ? 'true' : 'false');
       else if (el.value !== '') p.set(el.dataset.param, el.value);
     });
-    // Keep the main simulator context synchronized for versions that use it.
     if (!p.has('snr')) p.set('snr', value('snr') || '15');
     if (!p.has('prbs')) p.set('prbs', value('prb') || '52');
     if (!p.has('mcs')) p.set('mcs', value('mcs') || '16');
@@ -47,62 +48,30 @@
     return p;
   }
 
-  async function runParameterized(card, version) {
-    const button = card.querySelector('.one');
-    const status = card.querySelector('.status');
-    const result = card.querySelector('.result');
-    button.disabled = true; status.textContent = 'RUNNING'; status.className = 'status ready';
-    try {
-      const r = await fetch('/api/lab?' + getParams(card, version).toString(), {cache:'no-store'});
-      const d = await r.json();
-      if (!r.ok || !d.ok) throw Error(d.error || `HTTP ${r.status}`);
-      result.textContent = `${d.version}: ${d.result}`;
-      result.style.display = 'block'; card.classList.add('open');
-      status.textContent = 'PASS'; status.className = 'status pass';
-    } catch (e) {
-      result.textContent = e.message || String(e); result.style.display = 'block'; card.classList.add('open');
-      status.textContent = 'FAIL'; status.className = 'status fail';
-    } finally { button.disabled = false; }
+  const viz = (title, graphic, note) => `<div class="viz"><div class="viztitle">${title}</div>${graphic}<div class="viznote"><b>How to read it:</b> ${note}</div></div>`;
+
+  function visualization(version, card) {
+    const q = k => n(card,k,0), chk = k => checked(card,k); let h='';
+    if(version==='V19') h=viz('UCI control state',`<svg viewBox="0 0 620 105"><rect x="10" y="22" width="140" height="55" rx="7" fill="none" stroke="#35547e"/><text x="80" y="45" text-anchor="middle" fill="#dce7f8" font-size="13">PUCCH</text><text x="80" y="64" text-anchor="middle" fill="#7f8ca1" font-size="10">UCI payload</text><path d="M150 50H235" stroke="#71809a"/><path d="M225 44l10 6-10 6" fill="none" stroke="#71809a"/><rect x="245" y="22" width="140" height="55" rx="7" fill="none" stroke="#35547e"/><text x="315" y="45" text-anchor="middle" fill="#dce7f8" font-size="12">HARQ ${chk('ack')?'ACK':'NACK'}</text><text x="315" y="64" text-anchor="middle" fill="#7f8ca1" font-size="10">CSI ${q('csi')||12} · SR ${chk('sr')?'ON':'OFF'}</text><path d="M385 50H470" stroke="#71809a"/><path d="M460 44l10 6-10 6" fill="none" stroke="#71809a"/><rect x="480" y="22" width="130" height="55" rx="7" fill="none" stroke="#35547e"/><text x="545" y="45" text-anchor="middle" fill="#dce7f8" font-size="12">gNB</text><text x="545" y="64" text-anchor="middle" fill="#7f8ca1" font-size="10">control decision</text></svg>`,'ACK/NACK is HARQ feedback, SR requests uplink resources, and CSI reports channel state. The graphic explains the UCI flow; the Kotlin result remains authoritative.');
+    else if(version==='V20') h=viz('PUSCH transport path',`<svg viewBox="0 0 620 120"><g fill="none" stroke="#35547e"><rect x="10" y="30" width="120" height="55" rx="7"/><rect x="165" y="30" width="120" height="55" rx="7"/><rect x="320" y="30" width="120" height="55" rx="7"/><rect x="475" y="30" width="120" height="55" rx="7"/></g><g fill="#dce7f8" font-size="11" text-anchor="middle"><text x="70" y="55">${q('payloadBits')||12000} bits</text><text x="70" y="72">payload</text><text x="225" y="55">UL-SCH</text><text x="225" y="72">transport</text><text x="380" y="55">${q('layers')||2} layers</text><text x="380" y="72">mapping</text><text x="535" y="55">PUSCH</text><text x="535" y="72">RV ${q('rv')}</text></g></svg>`,'The conceptual chain is payload → UL-SCH → spatial layers → PUSCH. RV selects a redundancy version for HARQ retransmission diversity.');
+    else if(version==='V21'){let bars='';const base=Math.max(8,Math.min(80,50+q('snr')*2));for(let i=0;i<8;i++){const bh=base+(i%4)*6;bars+=`<rect x="${45+i*70}" y="${90-bh}" width="38" height="${bh}" rx="3" fill="none" stroke="#35547e"/>`;}h=viz('SRS sounding groups',`<svg viewBox="0 0 620 115"><text x="10" y="15" fill="#71809a" font-size="9">${q('layers')||2} ports · ${q('prbs')||52} RBs · SNR ${q('snr')||15} dB</text><line x1="30" y1="92" x2="590" y2="92" stroke="#71809a"/>${bars}</svg>`,'SRS lets the receiver estimate the uplink channel. Bar height is an educational representation of relative sounding strength, not a replacement for the Kotlin SRS result.');}
+    else if(version==='V22'){const ue=Math.max(1,q('ue')||4),pr=Math.max(1,q('prbs')||52),base=Math.floor(pr/ue);let x=10,rows='';for(let i=1;i<=ue;i++){const w=i===ue?pr-base*(ue-1):base;const ww=Math.max(12,w*560/pr);rows+=`<rect x="${x}" y="${25+i*22}" width="${ww}" height="15" rx="3" fill="none" stroke="#35547e"/><text x="${x+4}" y="${37+i*22}" fill="#dce7f8" font-size="8">UE${i} · ${w} PRB · CQI ${Math.max(0,(q('cqi')||12)-i+1)}</text>`;x+=ww+4;}h=viz('Multi-UE PRB allocation',`<svg viewBox="0 0 620 ${50+ue*22}"><text x="10" y="15" fill="#71809a" font-size="9">Available PRBs: ${pr}</text>${rows}</svg>`,'Each bar is one UE allocation. The existing scheduler considers UE conditions and weights; this map makes the resulting resource-sharing concept visible.');}
+    else if(version==='V23'){const slots=Math.min(40,Math.max(1,q('slots')||20)),dl=Math.max(0,Math.min(1,q('dlRatio')||.7));let cells='';for(let i=0;i<slots;i++){const isDl=i<Math.round(slots*dl),x=35+i*(555/slots);cells+=`<rect x="${x}" y="40" width="${Math.max(3,555/slots-2)}" height="35" rx="2" fill="none" stroke="#35547e"/><text x="${x+Math.max(3,555/slots-2)/2}" y="61" text-anchor="middle" fill="#dce7f8" font-size="7">${isDl?'D':'U'}</text>`;}h=viz('Frame / slot timeline',`<svg viewBox="0 0 620 100"><text x="35" y="20" fill="#71809a" font-size="9">${q('frames')||1} frame(s) · ${q('slots')||20} slots/frame · DL ${(dl*100).toFixed(0)}%</text>${cells}</svg>`,'D and U show the illustrative downlink/uplink division. The server response reports the actual slot execution count from the Kotlin engine.');}
+    else if(version==='V24'||version==='V25'){const bytes=Math.max(1,q('payloadBytes')||1400), unit=version==='V24'?Math.max(1,q('mtu')||300):Math.max(1,Math.ceil(bytes/8)), count=Math.ceil(bytes/unit);let seg='';for(let i=0;i<Math.min(count,24);i++){seg+=`<rect x="${12+(i%8)*74}" y="${25+Math.floor(i/8)*32}" width="66" height="23" rx="4" fill="none" stroke="#35547e"/><text x="${45+(i%8)*74}" y="${40+Math.floor(i/8)*32}" text-anchor="middle" fill="#dce7f8" font-size="8">${version==='V24'?'PDU':'SN'} ${i}</text>`;}h=viz(version==='V24'?'RLC segmentation':'PDCP sequence space',`<svg viewBox="0 0 620 135"><text x="12" y="15" fill="#71809a" font-size="9">${bytes} bytes → ${count} illustrative unit(s)</text>${seg}</svg>`,version==='V24'?'RLC segments an SDU into PDUs sized for the configured MTU and supports reassembly.':'PDCP sequence numbers identify packet order so out-of-order delivery can be reordered. SN size determines the sequence-number space.');}
+    else if(version==='V26'){const ue=Math.min(12,Math.max(1,q('ue')||2));let nodes='';for(let i=0;i<ue;i++){const a=i*Math.PI*2/ue,x=310+205*Math.cos(a),y=70+45*Math.sin(a);nodes+=`<line x1="310" y1="70" x2="${x}" y2="${y}" stroke="#263143"/><circle cx="${x}" cy="${y}" r="14" fill="none" stroke="#35547e"/><text x="${x}" y="${y+3}" text-anchor="middle" fill="#dce7f8" font-size="8">UE${i+1}</text>`;}h=viz('5G Core session topology',`<svg viewBox="0 0 620 140"><circle cx="310" cy="70" r="24" fill="none" stroke="#71809a"/><text x="310" y="74" text-anchor="middle" fill="#dce7f8" font-size="9">5GC</text>${nodes}</svg>`,'The V26 model represents UE/session state at the simulator boundary. More UEs create more modeled session records; this is not a live 5G core connection.');}
+    else if(version==='V27'){const x=q('x')||20,y=q('y')||0,px=Math.max(20,Math.min(600,310+x*3)),py=Math.max(25,Math.min(130,80-y*1.3));h=viz('Mobility / handover geometry',`<svg viewBox="0 0 620 155"><circle cx="200" cy="80" r="65" fill="none" stroke="#35547e"/><circle cx="420" cy="80" r="65" fill="none" stroke="#35547e"/><text x="200" y="84" text-anchor="middle" fill="#dce7f8" font-size="10">Cell 1</text><text x="420" y="84" text-anchor="middle" fill="#dce7f8" font-size="10">Cell 2</text><circle cx="${px}" cy="${py}" r="6" fill="none" stroke="#dce7f8"/><text x="${Math.min(570,px+10)}" y="${Math.max(18,py-10)}" fill="#dce7f8" font-size="9">UE (${x},${y})</text><text x="10" y="145" fill="#71809a" font-size="9">HO offset: ${q('offset')||3} dB</text></svg>`,'Handover compares serving and neighbor-cell measurements with an offset condition. Moving the UE changes the geometry; the Kotlin mobility evaluator decides the actual source and target.');}
+    else if(version==='V28'){const beams=Math.min(32,Math.max(2,q('beams')||16)),az=q('azimuth')||10;let bars='';for(let i=0;i<beams;i++){const center=(i-(beams-1)/2)*180/beams,d=Math.abs(((az-center+180)%360)-180),bh=Math.max(10,75-d*.35);bars+=`<rect x="${15+i*(590/beams)}" y="${92-bh}" width="${Math.max(3,590/beams-3)}" height="${bh}" rx="2" fill="none" stroke="#35547e"/>`;}h=viz('Beam sweep response',`<svg viewBox="0 0 620 120"><text x="12" y="14" fill="#71809a" font-size="9">Target azimuth ${az}° · ${q('beams')||16} candidate beams</text><line x1="12" y1="93" x2="600" y2="93" stroke="#71809a"/>${bars}</svg>`,'Beam management evaluates candidate spatial directions. The tallest region illustrates the candidate nearest the requested direction; the Kotlin sweep result remains authoritative.');}
+    else if(version==='V29'){const pattern=(card.querySelector('[data-param="pattern"]')?.value||'DDDDDDUUUU').toUpperCase(),slots=Math.min(40,Math.max(1,q('slotsPerFrame')||20));let cells='';for(let i=0;i<slots;i++){const c=pattern[i%Math.max(1,pattern.length)]||'S';cells+=`<rect x="${12+i*(588/slots)}" y="35" width="${Math.max(3,588/slots-2)}" height="35" rx="2" fill="none" stroke="#35547e"/><text x="${18+i*(588/slots)}" y="57" text-anchor="middle" fill="#dce7f8" font-size="7">${esc(c)}</text>`;}h=viz('TDD DL / UL pattern',`<svg viewBox="0 0 620 100"><text x="12" y="16" fill="#71809a" font-size="9">${esc(pattern)} · ${q('slotsPerFrame')||20} slots/frame</text>${cells}</svg>`,'D marks downlink and U marks uplink. Repeating the configured pattern shows how radio time is partitioned between transmission directions.');}
+    else if(version==='V30'){const t=q('throughput')||100,g=q('goodput')||90,ber=q('ber')||.02,lat=q('latency')||5;h=`<div class="viz"><div class="viztitle">System KPI dashboard</div><div class="kpis"><div class="kpi"><b>${t.toFixed(1)}</b><span>Throughput</span></div><div class="kpi"><b>${g.toFixed(1)}</b><span>Goodput</span></div><div class="kpi"><b>${ber.toFixed(4)}</b><span>BER</span></div><div class="kpi"><b>${lat.toFixed(1)} ms</b><span>Latency</span></div></div><div class="viznote"><b>How to read it:</b> Throughput is gross rate, goodput is useful delivered rate, BER is bit error probability, and latency is delay. V30 combines these and other inputs into analytics metrics.</div></div>`;}
+    const old=card.querySelector('.viz');if(old)old.remove();if(h)card.querySelector('.result').after(document.createRange().createContextualFragment(h));
   }
 
-  function bindCard(card) {
-    const version = (card.querySelector('.testtop b')?.textContent || '').match(/^V\d+/)?.[0];
-    if (!PARAM.has(version) || card.dataset.labBound) return;
-    card.dataset.labBound = '1';
-    const panel = document.createElement('div'); panel.className = 'labparams'; panel.innerHTML = controls(version) + `<div class="labhint" style="grid-column:1/-1">These controls are passed directly to the existing Kotlin V${version.slice(1)} implementation through the web adapter. They do not change the canonical regression vectors.</div>`;
-    card.querySelector('.result').before(panel);
-    card.querySelector('.explain').insertAdjacentHTML('afterbegin', '<span class="muted"><b>Mode:</b> parameterized interactive adapter</span><br>');
-    card.querySelector('.one').addEventListener('click', e => { e.stopImmediatePropagation(); runParameterized(card, version); }, true);
-  }
+  async function runParameterized(card,version){const button=card.querySelector('.one'),status=card.querySelector('.status'),result=card.querySelector('.result');button.disabled=true;status.textContent='RUNNING';status.className='status ready';try{const r=await fetch('/api/lab?'+getParams(card,version).toString(),{cache:'no-store'}),d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||`HTTP ${r.status}`);result.textContent=`${d.version}: ${d.result}`;result.style.display='block';card.classList.add('open');status.textContent='PASS';status.className='status pass';visualization(version,card);}catch(e){result.textContent=e.message||String(e);result.style.display='block';card.classList.add('open');status.textContent='FAIL';status.className='status fail';}finally{button.disabled=false;}}
 
-  async function runAllInteractive() {
-    const cards = Array.from(document.querySelectorAll('.test'));
-    const summary = document.getElementById('summary');
-    const button = document.getElementById('runall');
-    button.disabled = true; button.textContent = 'RUNNING…';
-    let passed = 0;
-    try {
-      const interactive = cards.filter(c => PARAM.has((c.querySelector('.testtop b')?.textContent || '').match(/^V\d+/)?.[0]));
-      for (const card of interactive) {
-        const v = (card.querySelector('.testtop b').textContent.match(/^V\d+/) || [])[0];
-        await runParameterized(card, v);
-        if (card.querySelector('.status').classList.contains('pass')) passed++;
-      }
-      summary.textContent = `${passed}/${interactive.length} V19–V30 parameterized tests passed; V31–V60 remain canonical.`;
-    } finally { button.disabled = false; button.textContent = 'RUN ALL REFERENCE TESTS'; }
-  }
+  function bindCard(card){const version=(card.querySelector('.testtop b')?.textContent||'').match(/^V\d+/)?.[0];if(!PARAM.has(version)||card.dataset.labBound)return;card.dataset.labBound='1';const panel=document.createElement('div');panel.className='labparams';panel.innerHTML=controls(version)+`<div class="labhint" style="grid-column:1/-1">Controls are passed to the existing Kotlin V${version.slice(1)} implementation through the web adapter. They do not change canonical regression vectors.</div>`;card.querySelector('.result').before(panel);card.querySelector('.explain').insertAdjacentHTML('afterbegin','<span class="muted"><b>Mode:</b> parameterized interactive adapter</span><br>');card.querySelector('.one').addEventListener('click',e=>{e.stopImmediatePropagation();runParameterized(card,version)},true);}
 
-  function bind() {
-    addStyles();
-    document.querySelectorAll('.test').forEach(bindCard);
-    const all = document.getElementById('runall');
-    if (all && !all.dataset.labRunAllBound) {
-      all.dataset.labRunAllBound = '1';
-      all.addEventListener('click', e => { e.stopImmediatePropagation(); runAllInteractive(); }, true);
-    }
-  }
+  async function runAllInteractive(){const cards=Array.from(document.querySelectorAll('.test')),summary=document.getElementById('summary'),button=document.getElementById('runall');button.disabled=true;button.textContent='RUNNING…';let passed=0;try{const interactive=cards.filter(c=>PARAM.has((c.querySelector('.testtop b')?.textContent||'').match(/^V\d+/)?.[0]));for(const card of interactive){const v=(card.querySelector('.testtop b').textContent.match(/^V\d+/)||[])[0];await runParameterized(card,v);if(card.querySelector('.status').classList.contains('pass'))passed++;}summary.textContent=`${passed}/${interactive.length} V19–V30 parameterized tests passed; V31–V60 remain canonical.`;}finally{button.disabled=false;button.textContent='RUN ALL REFERENCE TESTS';}}
 
-  const observer = new MutationObserver(bind);
-  const start = () => { bind(); const g = document.getElementById('groups'); if (g) observer.observe(g, {childList:true, subtree:true}); };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+  function bind(){addStyles();document.querySelectorAll('.test').forEach(bindCard);const all=document.getElementById('runall');if(all&&!all.dataset.labRunAllBound){all.dataset.labRunAllBound='1';all.addEventListener('click',e=>{e.stopImmediatePropagation();runAllInteractive()},true);}}
+  const observer=new MutationObserver(bind);const start=()=>{bind();const g=document.getElementById('groups');if(g)observer.observe(g,{childList:true,subtree:true})};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
