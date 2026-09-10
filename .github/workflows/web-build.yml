@@ -26,9 +26,10 @@ jobs:
       - name: Smoke test HTTP API
         shell: bash
         run: |
+          set -o pipefail
           gradle :web-server:run > web-server.log 2>&1 &
           PID=$!
-          trap 'kill $PID || true' EXIT
+          trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "===== HTTP smoke-test diagnostics ====="; echo "--- health response ---"; cat /tmp/health.json 2>/dev/null || true; echo "--- simulation response ---"; cat /tmp/sim.json 2>/dev/null || true; echo "--- full-suite response ---"; cat /tmp/suite.json 2>/dev/null || true; echo "--- lab responses ---"; cat /tmp/v19.json 2>/dev/null || true; cat /tmp/v22.json 2>/dev/null || true; cat /tmp/v29.json 2>/dev/null || true; echo "--- web-server.log ---"; cat web-server.log 2>/dev/null || true; fi; kill $PID 2>/dev/null || true' EXIT
           for i in {1..30}; do
             if curl -fsS http://127.0.0.1:8080/api/health >/tmp/health.json; then break; fi
             sleep 1
