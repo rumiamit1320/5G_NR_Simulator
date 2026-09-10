@@ -3,3 +3,4 @@ dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_P
 rootProject.name = "5G_NR_Simulator"
 include(":app")
 include(":nr-core")
+include(":web-server")
