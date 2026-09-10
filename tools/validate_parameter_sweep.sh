@@ -16,7 +16,7 @@ for spec in \
   "snr_0|snr=0&prbs=24&mcs=4&ue=2&tx=2&rx=2&layers=1&mod=16-QAM&scs=30&harq=true&tick=1" \
   "snr_15|snr=15&prbs=52&mcs=16&ue=4&tx=4&rx=4&layers=2&mod=64-QAM&scs=30&harq=true&tick=2" \
   "snr_35|snr=35&prbs=106&mcs=27&ue=8&tx=4&rx=4&layers=4&mod=256-QAM&scs=60&harq=false&tick=3" \
-  "prbs_275|snr=15&prbs=106&mcs=16&ue=4&tx=4&rx=4&layers=4&mod=64-QAM&scs=60&harq=true&tick=4"; do
+  "prbs_106|snr=15&prbs=106&mcs=16&ue=4&tx=4&rx=4&layers=4&mod=64-QAM&scs=60&harq=true&tick=4"; do
   name="${spec%%|*}"; query="${spec#*|}"
   get_json "$name" "/api/simulate?$query"
 done
@@ -34,7 +34,7 @@ def finite(d, path):
         cur=cur[p]
     return isinstance(cur,(int,float)) and math.isfinite(float(cur))
 
-items=[load(x) for x in ('snr_m5','snr_0','snr_15','snr_35','prbs_275')]
+items=[load(x) for x in ('snr_m5','snr_0','snr_15','snr_35','prbs_106')]
 for d in items:
     assert d.get('ok') is True
     assert all(finite(d,p) for p in ('primary.bits','primary.symbols','primary.snr','primary.evm','primary.throughputMbps','primary.ber'))
@@ -47,7 +47,8 @@ for d in items[:4]:
     expected=max(0.0,min(0.5,0.5*10.0**(-snr/10.0)))
     assert math.isclose(float(d['primary']['ber']), expected, rel_tol=1e-12, abs_tol=1e-15), (snr,d['primary']['ber'],expected)
 
-assert items[0]['primary']['ber'] > items[1]['primary']['ber'] > items[2]['primary']['ber'] > items[3]['primary']['ber']
+# The clipping at 0.5 makes -5 dB and 0 dB equal; from 0 dB upward the model is strictly decreasing.
+assert items[0]['primary']['ber'] >= items[1]['primary']['ber'] > items[2]['primary']['ber'] > items[3]['primary']['ber']
 assert all(d['primary']['evm'] >= 0 for d in items)
 assert items[0]['config']['prbs']==1 and items[3]['config']['prbs']==106 and items[4]['config']['prbs']==106
 assert items[3]['config']['layers']==4 and items[3]['config']['scs']==60 and items[3]['config']['harq'] is False
