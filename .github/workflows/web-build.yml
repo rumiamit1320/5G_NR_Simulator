@@ -23,17 +23,27 @@ jobs:
         run: gradle :web-server:build
       - name: Smoke test application classes
         run: gradle :web-server:classes
+      - name: Start web server
+        shell: bash
+        run: |
+          gradle :web-server:run > web-server.log 2>&1 &
+          echo $! > web-server.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8080/api/health >/tmp/health.json; then
+              echo 'Web server is ready.'
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'Web server did not become ready.'
+          cat web-server.log
+          exit 1
       - name: Smoke test HTTP API
         shell: bash
         run: |
-          set -o pipefail
-          gradle :web-server:run > web-server.log 2>&1 &
-          PID=$!
-          trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "===== HTTP smoke-test diagnostics ====="; echo "--- health response ---"; cat /tmp/health.json 2>/dev/null || true; echo "--- simulation response ---"; cat /tmp/sim.json 2>/dev/null || true; echo "--- full-suite response ---"; cat /tmp/suite.json 2>/dev/null || true; echo "--- lab responses ---"; cat /tmp/v19.json 2>/dev/null || true; cat /tmp/v22.json 2>/dev/null || true; cat /tmp/v29.json 2>/dev/null || true; echo "--- web-server.log ---"; cat web-server.log 2>/dev/null || true; fi; kill $PID 2>/dev/null || true' EXIT
-          for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:8080/api/health >/tmp/health.json; then break; fi
-            sleep 1
-          done
+          set -euo pipefail
+          trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "===== HTTP smoke-test diagnostics ====="; echo "--- health response ---"; cat /tmp/health.json 2>/dev/null || true; echo "--- simulation response ---"; cat /tmp/sim.json 2>/dev/null || true; echo "--- full-suite response ---"; cat /tmp/suite.json 2>/dev/null || true; echo "--- lab responses ---"; cat /tmp/v19.json 2>/dev/null || true; cat /tmp/v22.json 2>/dev/null || true; cat /tmp/v29.json 2>/dev/null || true; echo "--- web-server.log ---"; cat web-server.log 2>/dev/null || true; fi' EXIT
+          curl -fsS http://127.0.0.1:8080/api/health >/tmp/health.json
           grep -q '"ok":true' /tmp/health.json
           curl -fsS 'http://127.0.0.1:8080/api/simulate?snr=15&prbs=52&mcs=16&ue=4&tx=4&rx=4&layers=2&mod=64-QAM&scs=30&harq=true' >/tmp/sim.json
           grep -q '"ok":true' /tmp/sim.json
@@ -51,9 +61,21 @@ jobs:
           curl -fsS http://127.0.0.1:8080/lab.html >/tmp/lab.html
           grep -q '/lab.js' /tmp/lab.html
           echo 'Web API, parameterized V19-V30 lab, and full NR regression smoke tests passed.'
-          bash tools/validate_web_scenarios.sh
-          bash tools/validate_lab_visualizations.sh
-          bash tools/validate_parameter_sweep.sh
+      - name: Validate end-to-end simulation scenarios
+        run: bash tools/validate_web_scenarios.sh
+      - name: Validate educational lab visualizations
+        run: bash tools/validate_lab_visualizations.sh
+      - name: Validate radio and lab parameter sweep
+        run: bash tools/validate_parameter_sweep.sh
+      - name: Stop web server
+        if: always()
+        shell: bash
+        run: |
+          if [ -f web-server.pid ]; then
+            kill "$(cat web-server.pid)" 2>/dev/null || true
+          fi
+          pkill -f 'com.example.nrsimulator.web.WebServerKt' 2>/dev/null || true
+          pkill -f 'web-server.*run' 2>/dev/null || true
       - name: Package standalone web distribution
         run: |
           gradle :web-server:installDist --no-daemon
