@@ -60,6 +60,16 @@ The web layer is additive: it calls the retained Kotlin reference engine rather 
 
 The V19–V60 laboratory has an automated educational-visualization check. It verifies that the lab page, visualization renderer, explanatory "How to read it" text, V19/V30 visualizations, and V31–V60 extension are present, and that representative V19/V22/V29 API routes remain live. V49–V58 now expose their actual existing Kotlin model parameters through the web adapter while V44/V45/V59/V60 remain canonical reference vectors.
 
+## V61 end-to-end link laboratory
+
+V61 is a separate additive execution path in `NrIntegratedLinkV61.kt`. It does not replace or modify the existing V1–V60 engines. The pipeline is:
+
+`bits → CRC-24C → scrambling → Polar V47 → rate matching → QAM → layer/precoding boundary → OFDM → AWGN → MMSE/ZF equalization → demodulation → rate recovery → Polar decode → descrambling → CRC → BER/EVM/throughput`.
+
+The web endpoint is `/api/link`, and the interactive laboratory is `/link.html`. CI validates QPSK, 16-QAM, 64-QAM and 256-QAM configurations. V61 currently uses the retained V47 Polar decoder for its bit-accurate round trip; the existing V46/V8 LDPC engines remain intact and are not replaced. V61's rate-matching window is deliberately reversible for this hard-decision laboratory path rather than being presented as a normative 38.212 LDPC rate-matching implementation.
+
+The V61 result exposes stage-by-stage diagnostics, coded/transmitted/decoded bit counts, CRC status, BER, EVM, throughput, OFDM occupancy and TX/RX constellation samples. The web layer and CI therefore exercise the new chain without changing the current simulator API or Android architecture.
+
 For deployment, the web server can be packaged with:
 
 ```bash
@@ -67,4 +77,4 @@ gradle :web-server:installDist --no-daemon
 tar -C web-server/build/install -czf 5g-nr-simulator-web.tar.gz web-server
 ```
 
-A root `Dockerfile` builds the same `:web-server` distribution on JDK 17 and runs it as an unprivileged user on port 8080. CI builds the container, runs the scenario/visualization/parameter-sweep validations, and publishes the standalone distribution as a workflow artifact. This is deployment-ready packaging; no hosted production service or 3GPP certification claim is implied.
+A root `Dockerfile` builds the same `:web-server` distribution on JDK 17 and runs it as an unprivileged user on port 8080. CI builds the container, runs the scenario/visualization/parameter-sweep/V61 validations, and publishes the standalone distribution as a workflow artifact. This is deployment-ready packaging; no hosted production service or 3GPP certification claim is implied.
