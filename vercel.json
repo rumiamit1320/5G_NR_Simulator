@@ -1,26 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "services": {
-    "frontend": {
-      "root": "web-server/src/main/resources/static"
-    },
-    "kotlin-backend": {
-      "runtime": "container",
+    "app": {
       "root": ".",
+      "runtime": "container",
       "entrypoint": "Dockerfile.vercel"
     }
   },
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": {
-        "service": "kotlin-backend"
-      }
-    },
-    {
       "source": "/(.*)",
       "destination": {
-        "service": "frontend"
+        "service": "app"
       }
     }
   ]
