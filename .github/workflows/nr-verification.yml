@@ -1,0 +1,80 @@
+name: NR Verification Suite
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build existing modules
+        run: gradle :nr-core:build :web-server:build --no-daemon
+
+      - name: Run existing core regression suite
+        run: gradle :nr-core:test --no-daemon
+
+      - name: Start existing web server
+        shell: bash
+        run: |
+          gradle :web-server:run --no-daemon > verification-web-server.log 2>&1 &
+          echo $! > verification-web-server.pid
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:8080/api/health >/tmp/health.json; then
+              echo 'Web server is ready.'
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/api/health >/tmp/health.json
+
+      - name: Verify web HMI, API, V61-V64 and standards matrix
+        shell: bash
+        run: |
+          chmod +x tools/verify_nr_web.sh
+          BASE_URL=http://127.0.0.1:8080 ./tools/verify_nr_web.sh
+
+      - name: Validate V61 end-to-end link
+        run: bash tools/validate_v61_link.sh
+
+      - name: Validate parameter sweeps
+        run: bash tools/validate_parameter_sweep.sh
+
+      - name: Validate lab visualizations
+        run: bash tools/validate_lab_visualizations.sh
+
+      - name: Collect diagnostics on failure
+        if: failure()
+        run: |
+          echo '===== health ====='
+          cat /tmp/health.json 2>/dev/null || true
+          echo '===== web server log ====='
+          cat verification-web-server.log 2>/dev/null || true
+
+      - name: Stop web server
+        if: always()
+        run: |
+          if [ -f verification-web-server.pid ]; then
+            kill "$(cat verification-web-server.pid)" 2>/dev/null || true
+          fi
+          pkill -f 'com.example.nrsimulator.web.WebServerKt' 2>/dev/null || true
