@@ -1,156 +1,141 @@
-// V64 additive PDF report layer.
-// Self-contained engineering PDF writer: no CDN, npm bundle, or network dependency.
+// V64 additive PDF report layer. No external PDF library or network dependency.
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
   const clean = v => String(v ?? '').replace(/\s+/g, ' ').trim();
-  const val = id => { const e = $(id); return e ? clean(e.value ?? e.textContent) : '—'; };
-  const num = (v, d = 2) => v == null || Number.isNaN(Number(v)) ? '—' : Number(v).toFixed(d);
-  const pct = (v, d = 2) => v == null || Number.isNaN(Number(v)) ? '—' : (Number(v) * 100).toFixed(d) + '%';
+  const value = id => { const e = $(id); return e ? clean(e.value ?? e.textContent) : '—'; };
+  const fixed = (v, d = 2) => v == null || Number.isNaN(Number(v)) ? '—' : Number(v).toFixed(d);
+  const percent = (v, d = 2) => v == null || Number.isNaN(Number(v)) ? '—' : (Number(v) * 100).toFixed(d) + '%';
+  const esc = s => String(s ?? '').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)').replace(/[\r\n]+/g, ' ');
 
-  // Minimal PDF 1.4 writer. This deliberately avoids external libraries so the
-  // report works offline and cannot fail because a CDN is blocked.
-  const pdfEscape = s => String(s ?? '').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)').replace(/[\r\n]+/g, ' ');
-  function makePdf(pages) {
+  function makePdf(pageCommands, info) {
     const objects = [];
     const add = body => { objects.push(body); return objects.length; };
-    const font = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
-    const fontBold = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+    const f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    const f2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+    const pagesId = add('');
     const pageIds = [];
-    const contentIds = [];
-    pages.forEach(page => {
-      const stream = page.join('\n') + '\n';
-      const cid = add(`<< /Length ${stream.length} >>\nstream\n${stream}endstream`);
-      contentIds.push(cid);
-      pageIds.push(add('PLACEHOLDER'));
+    pageCommands.forEach(cmds => {
+      const stream = cmds.join('\n') + '\n';
+      const contentId = add(`<< /Length ${stream.length} >>\nstream\n${stream}endstream`);
+      pageIds.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> >> /Contents ${contentId} 0 R >>`));
     });
-    const pagesId = add('PLACEHOLDER');
+    objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map(x => x + ' 0 R').join(' ')}] /Count ${pageIds.length} >>`;
     const catalogId = add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
-    pageIds.forEach((pid, i) => {
-      objects[pid - 1] = `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 ${font} 0 R /F2 ${fontBold} 0 R >> >> /Contents ${contentIds[i]} 0 R >>`;
-    });
-    objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map(id => id + ' 0 R').join(' ')}] /Count ${pageIds.length} >>`;
-    let out = '%PDF-1.4\n%\xE2\xE3\xCF\xD3\n';
+    let pdf = '%PDF-1.4\n%\xE2\xE3\xCF\xD3\n';
     const offsets = [0];
-    objects.forEach((obj, i) => { offsets.push(out.length); out += `${i + 1} 0 obj\n${obj}\nendobj\n`; });
-    const xref = out.length;
-    out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-    for (let i = 1; i <= objects.length; i++) out += String(offsets[i]).padStart(10, '0') + ' 00000 n \n';
-    out += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R /Info ${add('<< /Title (5G NR Simulator V64 Simulation Report) /Author (5G NR Simulator V64 HMI) /Creator (5G_NR_Simulator) >>')} 0 R >>\nstartxref\n${xref}\n%%EOF`;
-    return new Blob([out], { type: 'application/pdf' });
+    objects.forEach((obj, i) => { offsets.push(pdf.length); pdf += `${i + 1} 0 obj\n${obj}\nendobj\n`; });
+    const xref = pdf.length;
+    pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    for (let i = 1; i <= objects.length; i++) pdf += String(offsets[i]).padStart(10, '0') + ' 00000 n \n';
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xref}\n%%EOF`;
+    return new Blob([pdf], { type: 'application/pdf' });
   }
 
-  function pageBuilder() {
-    const pages = [];
-    let cmds = [];
-    let y = 805;
-    const newPage = () => { if (cmds.length) pages.push(cmds); cmds = []; y = 805; header(); };
-    const header = () => {
-      cmds.push('0.04 0.10 0.16 rg 0 800 595 42 re f');
-      text('5G NR SIMULATOR', 40, 824, 11, true, '1 1 1');
-      text('V64 RADIO ENVIRONMENT LAB', 555, 824, 8, true, '0.85 0.9 0.94', true);
-    };
-    const footer = (id, pageNo) => {
-      cmds.push('0.65 0.68 0.72 RG 40 34 515 0 l S');
-      text(`Report ID: ${id}`, 40, 21, 7, false, '0.38 0.42 0.46');
-      text(`Page ${pageNo}`, 555, 21, 7, false, '0.38 0.42 0.46', true);
-    };
-    const text = (s, x, yy, size = 9, bold = false, rgb = '0.12 0.15 0.18', right = false) => {
-      cmds.push(`${rgb} rg BT /${bold ? 'F2' : 'F1'} ${size} Tf ${x} ${yy} Td ${right ? '1 0 0 1' : ''} (${pdfEscape(s)}) Tj ET`);
-    };
-    const wrapped = (s, x, width, size = 8.5, leading = 13) => {
-      const words = clean(s).split(' '); let line = '';
-      words.forEach(w => { const candidate = line ? line + ' ' + w : w; if (candidate.length > Math.max(1, Math.floor(width / (size * 0.48)))) { text(line, x, y, size); y -= leading; line = w; } else line = candidate; });
-      if (line) { text(line, x, y, size); y -= leading; }
-    };
-    const heading = title => { if (y < 90) newPage(); text(title, 40, y, 13, true, '0.06 0.16 0.25'); y -= 7; cmds.push('0.22 0.45 0.63 RG 40 ' + y + ' 515 0 l S'); y -= 20; };
-    const line = (label, value, x = 44, w = 170) => { text(label, x, y, 8, true, '0.35 0.4 0.45'); text(String(value ?? '—'), x + w, y, 8); y -= 15; };
-    const start = () => { header(); return { newPage, heading, wrapped, text, line, footer, pages, get y() { return y; }, set y(v) { y = v; } }; };
-    return start();
-  }
-
-  function buildReport() {
+  function generate() {
     const data = window.__v64LastData || {};
-    const c = data.config || {};
-    const m = data.metrics || {};
-    const us = data.ueStates || [];
+    const cfg = data.config || {};
+    const metrics = data.metrics || {};
+    const ues = data.ueStates || [];
     const now = new Date();
     const id = `V64-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
-    const generated = now.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
-    const b = pageBuilder();
+    const generated = now.toLocaleString();
+    const pages = [];
+    let c = [];
+    let y = 800;
+    let pageNo = 0;
 
-    // Cover page.
-    b.text('5G NR SIMULATOR', 58, 700, 14, true, '0.16 0.44 0.61');
-    b.text('V64 RADIO ENVIRONMENT', 58, 655, 27, true, '0.04 0.10 0.16');
-    b.text('SIMULATION REPORT', 58, 622, 24, true, '0.04 0.10 0.16');
-    b.text('Engineering analysis and simulation results', 58, 592, 11, false, '0.35 0.4 0.45');
-    b.text('DOCUMENT CONTROL', 58, 525, 9, true, '0.16 0.44 0.61');
-    b.line('Report ID', id, 58, 115); b.line('Generated by', '5G NR Simulator V64 HMI', 58, 115); b.line('Generated on', generated, 58, 115); b.line('Application', '5G_NR_Simulator', 58, 115); b.line('Simulation mode', 'Real-Time Closed Loop', 58, 115);
-    b.wrapped('Generated from the current V64 HMI state. Existing V61 PHY, V62 radio environment, V63 integration and V64 closed-loop computation engines are unchanged by this report layer.', 58, 475, 8, 12);
-    b.newPage();
+    const newPage = () => { if (c.length) pages.push(c); c = []; y = 800; pageNo++; header(); };
+    const header = () => {
+      c.push('0.04 0.10 0.16 rg 0 800 595 42 re f');
+      text('5G NR SIMULATOR', 40, 824, 10, true, '1 1 1');
+      text('V64 RADIO ENVIRONMENT LAB', 555, 824, 8, true, '0.88 0.92 0.96', true);
+    };
+    const text = (s, x, yy, size = 9, bold = false, rgb = '0.12 0.15 0.18', right = false) => {
+      c.push(`${rgb} rg BT /${bold ? 'F2' : 'F1'} ${size} Tf ${right ? '1 0 0 1 ' + x : x} ${yy} Td (${esc(s)}) Tj ET`);
+    };
+    const footer = () => {
+      c.push('0.70 0.72 0.75 RG 40 34 515 0 l S');
+      text(`Report ID: ${id}`, 40, 21, 7, false, '0.40 0.43 0.46');
+      text(`Page ${pageNo}`, 555, 21, 7, false, '0.40 0.43 0.46', true);
+    };
+    const ensure = n => { if (y < n) { footer(); newPage(); } };
+    const heading = title => { ensure(100); text(title, 40, y, 13, true, '0.06 0.16 0.25'); y -= 7; c.push(`0.22 0.45 0.63 RG 40 ${y} 515 0 l S`); y -= 20; };
+    const line = (label, val) => { ensure(65); text(label, 44, y, 8, true, '0.35 0.40 0.45'); text(String(val ?? '—'), 190, y, 8); y -= 15; };
+    const wrap = (s, size = 8.5, leading = 12) => {
+      const words = clean(s).split(' '); let lineText = ''; const max = Math.max(20, Math.floor(515 / (size * 0.48)));
+      words.forEach(w => { const next = lineText ? lineText + ' ' + w : w; if (next.length > max) { ensure(60); text(lineText, 40, y, size); y -= leading; lineText = w; } else lineText = next; });
+      if (lineText) { ensure(60); text(lineText, 40, y, size); y -= leading; }
+    };
 
-    b.heading('Executive Summary');
-    b.wrapped('This report records the current V64 real-time closed-loop simulation state, including radio conditions, PHY performance, scheduler behavior and per-UE results. It is an engineering simulation artifact and is not a 3GPP conformance report.', 40, 515);
-    b.heading('Key Performance Indicators');
-    b.line('Total Throughput', m.totalThroughputMbps == null ? '—' : num(m.totalThroughputMbps, 3) + ' Mbps');
-    b.line('System Fairness', num(m.systemFairness, 5));
-    b.line('PHY CRC Pass Rate', pct(m.phyCrcPassRate, 3));
-    b.line('PHY BER', m.phyBer == null ? '—' : Number(m.phyBer).toExponential(4));
+    // Cover.
+    pageNo = 1; header();
+    text('5G NR SIMULATOR', 58, 690, 14, true, '0.16 0.44 0.61');
+    text('V64 RADIO ENVIRONMENT', 58, 645, 26, true, '0.04 0.10 0.16');
+    text('SIMULATION REPORT', 58, 613, 23, true, '0.04 0.10 0.16');
+    text('Engineering analysis and simulation results', 58, 583, 10, false, '0.35 0.40 0.45');
+    text('DOCUMENT CONTROL', 58, 515, 9, true, '0.16 0.44 0.61');
+    y = 485;
+    line('Report ID', id); line('Generated by', '5G NR Simulator V64 HMI'); line('Generated on', generated); line('Application', '5G_NR_Simulator'); line('Simulation mode', 'Real-Time Closed Loop');
+    wrap('Generated from the current V64 HMI state. This report layer does not modify the V61 PHY, V62 radio environment, V63 integration, or V64 closed-loop computation engines.', 8, 12);
+    footer();
+    newPage();
 
-    b.heading('Simulation Configuration');
-    b.line('Cells', c.cells ?? val('cells')); b.line('UE count', c.ueCount ?? c.ue ?? val('ue')); b.line('PRBs / cell', c.prbs ?? val('prbs')); b.line('SCS', `${c.scs ?? val('scs')} kHz`); b.line('UE velocity', `${c.velocityKmh ?? c.velocity ?? val('velocity')} km/h`); b.line('Simulation slots', c.slots ?? val('slots')); b.line('Payload', `${c.payloadBits ?? '128'} bits`); b.line('TX / RX', `${c.tx ?? 4} / ${c.rx ?? 4}`); b.line('Layers', c.layers ?? 1);
+    heading('Executive Summary');
+    wrap('This document records the current V64 real-time closed-loop simulation state, including radio conditions, PHY performance, scheduler behavior, and per-UE results. It is an engineering simulation artifact, not a 3GPP conformance report.');
+    heading('Key Performance Indicators');
+    line('Total Throughput', metrics.totalThroughputMbps == null ? '—' : fixed(metrics.totalThroughputMbps, 3) + ' Mbps');
+    line('System Fairness', fixed(metrics.systemFairness, 5));
+    line('PHY CRC Pass Rate', percent(metrics.phyCrcPassRate, 3));
+    line('PHY BER', metrics.phyBer == null ? '—' : Number(metrics.phyBer).toExponential(4));
 
-    b.heading('Per-UE Radio / PHY Results');
-    if (!us.length) b.wrapped('No UE result is currently available.', 40, 515);
-    us.forEach(u => {
-      if (b.y < 120) b.newPage(), b.heading('Per-UE Results — Continuation');
-      b.text(`UE ${u.ueId}`, 44, b.y, 9, true, '0.16 0.44 0.61'); b.y -= 14;
-      b.line('SINR / CQI / MCS', `${num(u.sinrDb ?? u.meanSinrDb,2)} dB / ${u.cqi ?? u.meanCqi ?? '—'} / ${u.mcs ?? u.meanMcs ?? '—'}`);
-      b.line('Allocated PRBs', u.allocatedPrbs ?? u.totalAllocatedPrbs ?? '—'); b.line('Throughput', num(u.throughputMbps,3) + ' Mbps'); b.line('BLER', u.bler == null && u.meanBler == null ? '—' : num((u.bler ?? u.meanBler) * 100,3) + '%'); b.line('PHY CRC pass rate', pct(u.phyCrcPassRate,1)); b.line('PHY BER', u.phyBer == null ? '—' : Number(u.phyBer).toExponential(4)); b.y -= 5;
+    heading('Simulation Configuration');
+    line('Cells', cfg.cells ?? value('cells')); line('UE count', cfg.ueCount ?? cfg.ue ?? value('ue')); line('PRBs / cell', cfg.prbs ?? value('prbs')); line('SCS', `${cfg.scs ?? value('scs')} kHz`); line('UE velocity', `${cfg.velocityKmh ?? cfg.velocity ?? value('velocity')} km/h`); line('Simulation slots', cfg.slots ?? value('slots')); line('Payload', `${cfg.payloadBits ?? 128} bits`); line('TX / RX', `${cfg.tx ?? 4} / ${cfg.rx ?? 4}`); line('Layers', cfg.layers ?? 1);
+
+    heading('Per-UE Radio / PHY Results');
+    if (!ues.length) wrap('No UE result is currently available.');
+    ues.forEach(u => {
+      ensure(130);
+      text(`UE ${u.ueId}`, 44, y, 9, true, '0.16 0.44 0.61'); y -= 15;
+      line('SINR / CQI / MCS', `${fixed(u.sinrDb ?? u.meanSinrDb,2)} dB / ${u.cqi ?? u.meanCqi ?? '—'} / ${u.mcs ?? u.meanMcs ?? '—'}`);
+      line('Allocated PRBs', u.allocatedPrbs ?? u.totalAllocatedPrbs ?? '—');
+      line('Throughput', fixed(u.throughputMbps,3) + ' Mbps');
+      line('BLER', u.bler == null && u.meanBler == null ? '—' : fixed((u.bler ?? u.meanBler) * 100,3) + '%');
+      line('PHY CRC pass rate', percent(u.phyCrcPassRate,1));
+      line('PHY BER', u.phyBer == null ? '—' : Number(u.phyBer).toExponential(4));
+      y -= 4;
     });
 
-    const blocks = [['PHY Pipeline Result','phyResult'],['MIMO / CSI Result','mimoResult'],['Scheduler Experiment Result','schedulerResult'],['Parameter Sweep Result','sweepResult']];
-    blocks.forEach(([title, id2]) => { const e = $(id2); const t = clean(e?.textContent || e?.value || ''); if (t && t !== '—' && t !== 'Running…') { if (b.y < 150) b.newPage(); b.heading(title); b.wrapped(t, 40, 515, 7.5, 10); } });
+    [['PHY Pipeline Result','phyResult'],['MIMO / CSI Result','mimoResult'],['Scheduler Experiment Result','schedulerResult'],['Parameter Sweep Result','sweepResult']].forEach(([title, id2]) => {
+      const e = $(id2); const t = clean(e?.textContent || e?.value || '');
+      if (t && t !== '—' && t !== 'Running…') { heading(title); wrap(t, 7.5, 10); }
+    });
 
-    if (b.y < 150) b.newPage();
-    b.heading('Simulation Log');
+    heading('Simulation Log');
     const logs = Array.from(document.querySelectorAll('#logBody tr[data-v64-log]'));
-    if (!logs.length) b.wrapped('No log events recorded.', 40, 515);
-    logs.forEach(r => { if (b.y < 100) b.newPage(), b.heading('Simulation Log — Continuation'); const td = r.querySelectorAll('td'); b.wrapped(`[${clean(td[0]?.textContent)}] [${clean(td[1]?.textContent)}] ${clean(td[2]?.textContent)} ${clean(td[3]?.textContent)}`, 40, 515, 7.5, 10); });
+    if (!logs.length) wrap('No log events recorded.');
+    logs.forEach(r => { const td = r.querySelectorAll('td'); wrap(`[${clean(td[0]?.textContent)}] [${clean(td[1]?.textContent)}] ${clean(td[2]?.textContent)} ${clean(td[3]?.textContent)}`, 7.5, 10); });
 
+    heading('Live Performance History');
     const history = window.__v64Performance?.history || [];
-    if (b.y < 150) b.newPage();
-    b.heading('Live Performance History');
-    b.wrapped(`The HMI retained ${history.length} live performance samples. The numerical history below is the data source used by the live performance plots.`, 40, 515, 8, 11);
-    history.slice(-100).forEach((s, i) => { if (b.y < 75) b.newPage(), b.heading('Performance History — Continuation'); b.text(`${i+1}. Throughput ${num(s.throughput,3)} Mbps | Avg SINR ${num(s.sinr,2)} dB | Avg BLER ${num(s.bler,3)}% | PRB ${num(s.prb,2)}%`, 44, b.y, 7.5); b.y -= 11; });
+    wrap(`The HMI retained ${history.length} live performance samples. The numerical history below is the data source used by the live performance plots.`, 8, 11);
+    history.slice(-100).forEach((s, i) => { ensure(55); text(`${i+1}. Throughput ${fixed(s.throughput,3)} Mbps | SINR ${fixed(s.sinr,2)} dB | BLER ${fixed(s.bler,3)}% | PRB ${fixed(s.prb,2)}%`, 44, y, 7.5); y -= 11; });
 
-    if (b.y < 120) b.newPage();
-    b.heading('Engineering Notes');
-    b.wrapped('V64 closes the loop by feeding measured PHY outcomes back into proportional-fair scheduling history. BLER/ACK-NACK feedback is represented at the closed-loop scheduler layer; this implementation does not claim full HARQ retransmission and soft-combining behavior.', 40, 515, 8, 12);
-    b.wrapped('Radio and PHY results are generated by the existing simulator engines. This report layer only reads the current HMI state and serializes it into a self-contained PDF document.', 40, 515, 8, 12);
+    heading('Engineering Notes');
+    wrap('V64 feeds measured PHY outcomes back into proportional-fair scheduling history. BLER and ACK/NACK feedback are represented at the closed-loop scheduler layer; this implementation does not claim full HARQ retransmission and soft-combining behavior.', 8, 12);
+    wrap('The PDF is generated entirely in the browser from the current HMI state. No external JavaScript library, CDN, or network request is required.', 8, 12);
+    footer(); pages.push(c);
 
-    pagesWithFooters(b, id);
-    const blob = makePdf(b.pages);
+    const blob = makePdf(pages, { id });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `5G_NR_V64_Report_${now.toISOString().replace(/[:.]/g,'-')}.pdf`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
-  }
-
-  function pagesWithFooters(b, id) {
-    b.pages.forEach((p, i) => {
-      const footer = [];
-      footer.push('0.65 0.68 0.72 RG 40 34 515 0 l S');
-      const e = s => String(s).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)').replace(/[\r\n]+/g,' ');
-      footer.push(`0.38 0.42 0.46 rg BT /F1 7 Tf 40 21 Td (Report ID: ${e(id)}) Tj ET`);
-      footer.push(`0.38 0.42 0.46 rg BT /F1 7 Tf 555 21 Td (${i+1} / ${b.pages.length}) Tj ET`);
-      p.push(...footer);
-    });
   }
 
   function install() {
     const actions = document.querySelector('.actions');
     if (!actions || $('v64ReportBtn')) return;
     const btn = document.createElement('button');
-    btn.id = 'v64ReportBtn'; btn.type = 'button'; btn.textContent = '▣ Download Report'; btn.title = 'Generate a self-contained engineering PDF report'; btn.onclick = buildReport;
+    btn.id = 'v64ReportBtn'; btn.type = 'button'; btn.textContent = '▣ Download Report'; btn.title = 'Generate a self-contained engineering PDF report'; btn.addEventListener('click', generate);
     actions.appendChild(btn);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install); else install();
