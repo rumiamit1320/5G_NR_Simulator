@@ -11,10 +11,12 @@
   if (!velocity) return;
 
   let rerunTimer = null;
-  let userLive = !!liveToggle?.textContent.includes('ON');
+  let userLive = false;
   let firstAutoRunObserved = false;
 
-  // radio-v64-fixed.js currently owns the legacy 1.5 s scheduling loop.
+  if (liveToggle) liveToggle.textContent = '▶ Live: OFF';
+
+  // radio-v64-fixed.js owns the legacy 1.5 s scheduling loop.
   // Prevent that timer from continuing unless the operator explicitly enables Live.
   // Other timers, including the clock and velocity debounce, are untouched.
   const nativeSetTimeout = window.setTimeout.bind(window);
@@ -33,9 +35,6 @@
   function clearInitialAutoRun() {
     if (firstAutoRunObserved || userLive) return;
     firstAutoRunObserved = true;
-    // The legacy controller may have completed one request before this adapter
-    // loaded. Return the HMI to its intended idle/READY state and leave all
-    // V61/V62/V63/V64 engine logic untouched.
     if (runButton && document.getElementById('lastRun')?.textContent !== '--') {
       document.getElementById('reset')?.click();
     }
@@ -66,7 +65,8 @@
   velocity.addEventListener('change', updateDisplay);
   updateDisplay();
 
-  // Detect completion of the legacy first request without touching its controller.
+  // Neutralize any legacy first request that was already started before this
+  // additive adapter loaded, returning the HMI to the intended idle state.
   const watch = nativeSetTimeout(function pollInitialRun() {
     if (userLive) return;
     const last = document.getElementById('lastRun');
