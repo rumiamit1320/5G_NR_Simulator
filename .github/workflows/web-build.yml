@@ -60,13 +60,17 @@ jobs:
           grep -q '"version":"V29"' /tmp/v29.json
           curl -fsS http://127.0.0.1:8080/lab.html >/tmp/lab.html
           grep -q '/lab.js' /tmp/lab.html
-          echo 'Web API, parameterized V19-V30 lab, and full NR regression smoke tests passed.'
+          curl -fsS http://127.0.0.1:8080/link.html >/tmp/link.html
+          grep -q 'V61 End-to-End NR Link' /tmp/link.html
+          echo 'Web API, V19-V60 lab, and V61 link endpoint smoke tests passed.'
       - name: Validate end-to-end simulation scenarios
         run: bash tools/validate_web_scenarios.sh
       - name: Validate educational lab visualizations
         run: bash tools/validate_lab_visualizations.sh
       - name: Validate radio and lab parameter sweep
         run: bash tools/validate_parameter_sweep.sh
+      - name: Validate V61 end-to-end link
+        run: bash tools/validate_v61_link.sh
       - name: Stop web server
         if: always()
         shell: bash
