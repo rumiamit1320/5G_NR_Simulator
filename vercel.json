@@ -7,7 +7,7 @@
     "kotlin-backend": {
       "runtime": "container",
       "root": ".",
-      "entrypoint": "Dockerfile"
+      "entrypoint": "Dockerfile.vercel"
     }
   },
   "rewrites": [
