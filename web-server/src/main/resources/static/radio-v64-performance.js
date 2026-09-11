@@ -7,7 +7,7 @@
   const $ = id => document.getElementById(id);
   const N = (v,d=0) => Number.isFinite(Number(v)) ? Number(v) : d;
   const pct = v => Math.max(0, Math.min(100, N(v) * 100));
-  const avg = (us,key) => us.reduce((a,u)=>a+N(u[key]),0)/Math.max(1,us.length);
+  const avg = (us,key) => us.reduce((a,u)=>a+N(typeof key==='function'?key(u):u[key]),0)/Math.max(1,us.length);
 
   function sample(data) {
     if (!data || !Array.isArray(data.ueStates)) return;
@@ -21,8 +21,8 @@
     history.push({
       t:new Date(),
       throughput:N(m.totalThroughputMbps),
-      sinr:avg(us,'meanSinrDb'),
-      bler:pct(avg(us,'meanBler')),
+      sinr:avg(us,u=>u.meanSinrDb ?? u.sinrDb),
+      bler:pct(avg(us,u=>u.meanBler ?? u.bler)),
       prb:Math.max(0,Math.min(100,allocated/(prbs*cells*slots)*100))
     });
     while(history.length>MAX) history.shift();

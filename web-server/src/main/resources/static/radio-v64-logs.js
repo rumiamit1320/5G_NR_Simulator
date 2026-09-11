@@ -129,8 +129,9 @@
       @media(max-width:900px){#panel-logs .v64-log-detail{min-width:220px}}
     `;
     document.head.appendChild(style);
+    const logBody = $('logBody');
     const observer=new MutationObserver(enhance);
-    observer.observe(body,{childList:true,subtree:true});
+    observer.observe(logBody,{childList:true,subtree:true});
     enhance();
     return true;
   }
