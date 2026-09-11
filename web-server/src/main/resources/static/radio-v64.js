@@ -227,6 +227,7 @@
     load('/radio-v64-fixed.js');
     load('/radio-v64-plots.js');
     load('/radio-v64-mimo-plots.js');
+    load('/radio-v64-scheduler.js');
   }
 
   function init() {
