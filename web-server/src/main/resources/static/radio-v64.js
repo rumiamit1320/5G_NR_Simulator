@@ -232,6 +232,7 @@
     load('/radio-v64-settings.js');
     load('/radio-v64-performance.js');
     load('/radio-v64-velocity.js');
+    load('/radio-v64-report.js');
   }
 
   function init() {
