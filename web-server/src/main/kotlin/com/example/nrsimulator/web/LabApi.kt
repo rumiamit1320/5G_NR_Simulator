@@ -86,7 +86,7 @@ object LabApi {
                 "V36" -> { val t=q(exchange,"timer","2").toIntOrNull()?.coerceAtLeast(0)?:2; val r=NrMacV36.tick(NrMacStateV36(timers=mapOf(NrMacTimerV36.T300 to t))); ok("slot=${r.slot}, T300=${r.timers[NrMacTimerV36.T300]}", false) }
                 "V37" -> { val r=NrRlcV37.enqueue(NrRlcEntityV37(NrRlcConfigV37(NrRlcModeV37.AM)),bytes(q(exchange,"payloadBytes","1").toIntOrNull()?:1)); ok("SN=${r.first.txSn}, payload=${count(r.second.payload)}", false) }
                 "V38" -> { val p=bytes(q(exchange,"payloadBytes","2").toIntOrNull()?:2); val pd=NrPdcpV38(); val pp=pd.protect(ByteArray(16){it.toByte()},p,1,0,0); ok("protected=${count(pp)}, verified=${pd.verify(ByteArray(16){it.toByte()},pp,1,0,0)?.contentEquals(p)==true}", false) }
-                "V39" -> { val p=bytes(q(exchange,"payloadBytes","2").toIntOrNull()?:2); val d=NrRrcV39.decode(NrRrcV39.encode(NrRrcMessageV39(NrRrcProcedureV31.SETUP,1,p))); ok("payload=${count(d.payload)}, transaction=${d.transactionId}", false) }
+                "V39" -> { val p=bytes(q(exchange,"payloadBytes","1").toIntOrNull()?:1); val d=NrRrcV39.decode(NrRrcV39.encode(NrRrcMessageV39(NrRrcProcedureV31.SETUP,1,p))); ok("payload=${count(d.payload)}, transaction=${d.transactionId}", false) }
                 "V40" -> { val p=bytes(q(exchange,"payloadBytes","1").toIntOrNull()?:1); val ne=NrNasV40.protect(ByteArray(16){it.toByte()},NrNasEnvelopeV40(NrNasMessageV40.REGISTRATION_REQUEST,0,0,p),1,0,0); ok("payload=${count(p)}, mac=${ne.mac!=null}", false) }
                 "V41" -> { val p=bytes(q(exchange,"payloadBytes","1").toIntOrNull()?:1); val r=NrInterfaceV41.wrap(NrRanInterfaceV41.N2_NGAP,1,p); ok("iface=${r.iface}, payload=${count(r.payload)}", false) }
                 "V42" -> { val r=Nr5gcV42.establish(q(exchange,"plmn","001010"),q(exchange,"ueId","10").toIntOrNull()?:10); ok("state=${r.state}", false) }
@@ -184,6 +184,28 @@ object LabApi {
                 }
                 "V59" -> ok(NrConformanceV59.run(),false)
                 "V60" -> ok(NrComplianceV60.matrix(),false)
+                "V63" -> {
+                    val cfg = NrIntegratedSystemConfigV63(
+                        slots = q(exchange, "slots", "20").toIntOrNull()?.coerceIn(1, 1000) ?: 20,
+                        ueCount = q(exchange, "ue", "8").toIntOrNull()?.coerceIn(1, 64) ?: 8,
+                        cells = q(exchange, "cells", "3").toIntOrNull()?.coerceIn(1, 7) ?: 3,
+                        prbs = q(exchange, "prbs", "52").toIntOrNull()?.coerceIn(1, 106) ?: 52,
+                        scsKHz = q(exchange, "scs", "30").toIntOrNull() ?: 30,
+                        carrierGHz = q(exchange, "carrier", "3.5").toDoubleOrNull() ?: 3.5,
+                        velocityKmh = q(exchange, "velocity", "30").toDoubleOrNull() ?: 30.0,
+                        snrOffsetDb = q(exchange, "snrOffset", "0").toDoubleOrNull() ?: 0.0,
+                        payloadBitsPerUe = q(exchange, "payloadBits", "128").toIntOrNull() ?: 128,
+                        txAntennas = q(exchange, "tx", "4").toIntOrNull() ?: 4,
+                        rxAntennas = q(exchange, "rx", "4").toIntOrNull() ?: 4,
+                        layers = q(exchange, "layers", "1").toIntOrNull() ?: 1,
+                        seed = q(exchange, "seed", "6301").toIntOrNull() ?: 6301
+                    )
+                    val r = NrIntegratedSystemV63.run(cfg)
+                    val ues = r.ueStates.joinToString(",", prefix = "[", postfix = "]") {
+                        "{\"ueId\":${it.ueId},\"sinrDb\":${it.meanSinrDb},\"cqi\":${it.meanCqi},\"mcs\":${it.meanMcs},\"allocatedPrbs\":${it.totalAllocatedPrbs},\"throughputMbps\":${it.throughputMbps},\"bler\":${it.meanBler},\"phyCrcPassRate\":${it.phyCrcPassRate},\"phyBer\":${it.phyBer}}"
+                    }
+                    "{\"ok\":true,\"version\":\"V63\",\"config\":{\"slots\":${r.slots},\"ueCount\":${r.ueStates.size},\"cells\":${cfg.cells},\"prbs\":${cfg.prbs},\"scs\":${cfg.scsKHz},\"velocityKmh\":${cfg.velocityKmh}},\"metrics\":{\"totalThroughputMbps\":${r.totalThroughputMbps},\"systemFairness\":${r.systemFairness},\"phyCrcPassRate\":${r.phyCrcPassRate},\"phyBer\":${r.phyBer}},\"ueStates\":$ues}"
+                }
                 else -> throw IllegalArgumentException("Unsupported lab version: $version")
             }
             reply(exchange,response)
