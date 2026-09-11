@@ -224,15 +224,15 @@
       s.async = false;
       document.body.appendChild(s);
     };
-    load('/radio-v64-fixed.js');
-    load('/radio-v64-plots.js');
-    load('/radio-v64-mimo-plots.js');
-    load('/radio-v64-scheduler.js');
-    load('/radio-v64-topology.js');
-    load('/radio-v64-settings.js');
-    load('/radio-v64-performance.js');
-    load('/radio-v64-velocity.js');
-    load('/radio-v64-report.js');
+    load('/radio-v64-fixed.js?v=20260912-2');
+    load('/radio-v64-plots.js?v=20260912-2');
+    load('/radio-v64-mimo-plots.js?v=20260912-2');
+    load('/radio-v64-scheduler.js?v=20260912-2');
+    load('/radio-v64-topology.js?v=20260912-2');
+    load('/radio-v64-settings.js?v=20260912-2');
+    load('/radio-v64-performance.js?v=20260912-2');
+    load('/radio-v64-velocity.js?v=20260912-2');
+    load('/radio-v64-report.js?v=20260912-2');
   }
 
   function init() {
