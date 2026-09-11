@@ -1,0 +1,35 @@
+name: Apply V64 Settings UI
+on:
+  push:
+    branches: [ main ]
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, '[v64-settings-ui]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wire additive settings adapter and remove bootstrap
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('web-server/src/main/resources/static/radio-v64.js')
+          s = p.read_text()
+          marker = "load('/radio-v64-topology.js');"
+          add = "load('/radio-v64-settings.js');"
+          if add not in s:
+              if marker in s:
+                  s = s.replace(marker, marker + "\\n" + add, 1)
+              else:
+                  raise SystemExit('topology adapter load marker not found')
+              p.write_text(s)
+          w = Path('.github/workflows/apply-v64-settings-ui.yml')
+          w.unlink()
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add web-server/src/main/resources/static/radio-v64.js .github/workflows/apply-v64-settings-ui.yml
+          git commit -m '[v64-settings-ui] Wire clickable Settings adapter'
+          git push
