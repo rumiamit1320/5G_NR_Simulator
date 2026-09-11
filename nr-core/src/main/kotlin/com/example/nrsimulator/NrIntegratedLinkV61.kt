@@ -14,7 +14,7 @@ object NrIntegratedLinkV61 {
  private fun crc24c(x:IntArray):IntArray{var c=0;val p=0x1864CFB;for(b in x){val t=((c ushr 23)and 1) xor(b and 1);c=(c shl 1)and 0xFFFFFF;if(t!=0)c=c xor p};return IntArray(24){i->(c ushr(23-i))and 1}}
  private fun appendCrc(x:IntArray)=IntArray(x.size+24).also{x.copyInto(it);crc24c(x).copyInto(it,x.size)}
  private fun crcOk(x:IntArray):Boolean{if(x.size<24)return false;val n=x.size-24;return crc24c(x.copyOf(n)).contentEquals(x.copyOfRange(n,x.size))}
- private fun scramble(x:IntArray,seed:Int)=IntArray(x.size){i->var z=(seed xor(i*0x9E3779B9))or 1;z=z xor(z shl 13);z=z xor(z ushr 17);z=z xor(z shl 5);x[i] xor(z and 1)}
+ private fun scramble(x:IntArray,seed:Int)=IntArray(x.size){i->var z=seed xor(i*0x9E3779B9.toInt());z=z xor(z shl 13);z=z xor(z ushr 17);z=z xor(z shl 5);x[i] xor(z and 1)}
  private fun demod(x:Array<Complex>,m:Int):IntArray{val bps=log2(m.toDouble()).roundToInt();val l=sqrt(m.toDouble()).roundToInt();val lv=if(m==4)doubleArrayOf(-1/sqrt(2.0),1/sqrt(2.0))else DoubleArray(l){i->(2*i-l+1)/sqrt((2.0/3.0)*(m-1))};val o=IntArray(x.size*bps);for(s in x.indices){var best=0;var bd=Double.POSITIVE_INFINITY;for(q in lv.indices)for(i in lv.indices){val d=(x[s].re-lv[i]).pow(2)+(x[s].im-lv[q]).pow(2);if(d<bd){bd=d;best=q*lv.size+i}};if(m==4)best=when(best){0->3;1->2;2->1;else->0};for(k in 0 until bps)o[s*bps+k]=(best ushr(bps-1-k))and 1};return o}
  private fun ifft(s:Array<Complex>):Array<Complex>{val g=Array(N){Complex(0.0,0.0)};val n=minOf(s.size,N-2);val h=n/2;for(i in 0 until h)g[i+1]=s[i];for(i in h until n)g[N-n+i]=s[i];return Dsp.fft(g,true)}
  private fun fft(t:Array<Complex>,n:Int):Array<Complex>{val f=Dsp.fft(t);return Array(n){i->if(i<n/2)f[i+1]else f[N-n+i]}}
