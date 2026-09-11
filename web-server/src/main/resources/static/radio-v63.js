@@ -16,7 +16,7 @@ function render(r){
  $('crc').textContent=pct(r.metrics.phyCrcPassRate);
  $('ber').textContent=Number(r.metrics.phyBer).toExponential(3);
  $('status').textContent=`${r.config.slots} slots · ${r.config.ueCount} UEs · ${r.config.cells} cells · ${r.config.prbs} PRBs`;
- $('rows').innerHTML=r.ueStates.map(u=>`<tr><td>UE ${esc(u.ueId)}</td><td>${Number(u.sinrDb).toFixed(2)}</td><td>${Number(u.cqi).toFixed(2)}</td><td>${Number(u.mcs).toFixed(2)}</td><td>${u.rank??'—'}</td><td>${u.allocatedPrbs}</td><td>${Number(u.throughputMbps).toFixed(3)}</td><td>${pct(u.bler)}</td><td class="${Number(u.phyCrcPassRate)>=.5?'good':'bad'}">${pct(u.phyCrcPassRate)}</td><td>${Number(u.phyBer).toExponential(2)}</td></tr>`).join('');
+ $('rows').innerHTML=r.ueStates.map(u=>`<tr><td>UE ${esc(u.ueId)}</td><td>${Number(u.sinrDb).toFixed(2)}</td><td>${Number(u.cqi).toFixed(2)}</td><td>${Number(u.mcs).toFixed(2)}</td><td>—</td><td>${u.allocatedPrbs}</td><td>${Number(u.throughputMbps).toFixed(3)}</td><td>${pct(u.bler)}</td><td class="${Number(u.phyCrcPassRate)>=.5?'good':'bad'}">${pct(u.phyCrcPassRate)}</td><td>${Number(u.phyBer).toExponential(2)}</td></tr>`).join('');
  renderMap(r.ueStates,r.config.cells);
 }
 async function run(){
