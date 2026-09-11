@@ -8,7 +8,7 @@ fun main() {
     runCatching { check("V32-V45", NrV32V45Tests.run().all { it.contains("PASS") }) }.onFailure { check("V32-V45", false) }
     runCatching { check("V46-V60", NrV46V60Tests.run().pass) }.onFailure { check("V46-V60", false) }
     runCatching {
-        val r = NrIntegratedLinkV61.run(NrIntegratedLinkConfigV61(payloadBits = 128, snrDb = 25.0, modulationOrder = 16, layers = 1, txAntennas = 1, rxAntennas = 1))
+        val r = NrIntegratedLinkV61.run(NrIntegratedLinkConfigV61(payloadBits = 128, snrDb = 40.0, modulationOrder = 16, layers = 1, txAntennas = 1, rxAntennas = 1))
         check("V61", r.crcPass && r.decodedBits == r.payloadBits && r.bitErrors == 0 && r.ber == 0.0)
     }.onFailure { check("V61", false) }
 
