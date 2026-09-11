@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>5G NR Radio Environment — V63</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;background:#0b1020;color:#e8edf7}*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#0b1020,#111a31);min-height:100vh}.wrap{max-width:1400px;margin:auto;padding:22px}.top{display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap}.title h1{margin:0;font-size:25px}.title p{margin:5px 0 0;color:#94a3b8}.controls{display:grid;grid-template-columns:repeat(6,minmax(100px,1fr));gap:9px;margin:18px 0}.control{background:#121a2d;border:1px solid #25304a;border-radius:12px;padding:10px}.control label{display:block;font-size:11px;color:#8fa0bb;margin-bottom:5px}.control input{width:100%;background:#0b1020;color:#fff;border:1px solid #33415f;border-radius:7px;padding:7px}.button{border:0;border-radius:9px;padding:9px 14px;background:#e8edf7;color:#111827;font-weight:700;cursor:pointer}.button.secondary{background:#25304a;color:#e8edf7}.status{font-size:12px;color:#94a3b8}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:#121a2d;border:1px solid #25304a;border-radius:14px;padding:14px}.kpi span{display:block;color:#8fa0bb;font-size:12px}.kpi strong{display:block;font-size:23px;margin-top:6px}.panel{margin-top:14px}.table-wrap{overflow:auto}.table{width:100%;border-collapse:collapse;font-size:13px}.table th,.table td{text-align:right;padding:9px 8px;border-bottom:1px solid #26324b;white-space:nowrap}.table th{color:#8fa0bb;font-weight:600}.table th:first-child,.table td:first-child{text-align:left}.good{color:#9ae6b4}.bad{color:#fca5a5}.bar{height:8px;background:#202b43;border-radius:8px;overflow:hidden;min-width:80px}.bar i{display:block;height:100%;background:#8ea7ff}.map{position:relative;height:390px;background:#0d1528;border:1px solid #25304a;border-radius:14px;overflow:hidden}.map .grid{position:absolute;inset:0;background-image:linear-gradient(#1d2941 1px,transparent 1px),linear-gradient(90deg,#1d2941 1px,transparent 1px);background-size:40px 40px;opacity:.45}.node{position:absolute;transform:translate(-50%,-50%);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}.cell{width:30px;height:30px;border:2px solid #f8fafc;background:#26344e}.ue{width:18px;height:18px;background:#8ea7ff;color:#0b1020;border:2px solid #dbeafe}.legend{display:flex;gap:18px;color:#94a3b8;font-size:12px;margin-top:8px}.note{color:#71809b;font-size:11px;margin-top:10px}@media(max-width:900px){.controls{grid-template-columns:repeat(3,1fr)}.kpis{grid-template-columns:repeat(2,1fr)}}@media(max-width:550px){.controls{grid-template-columns:repeat(2,1fr)}.kpis{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top"><div class="title"><h1>5G NR Radio Environment — V63</h1><p>V62 radio conditions → scheduler → existing V61 PHY</p></div><div><button class="button" id="run">Run simulation</button> <button class="button secondary" id="auto">Live: OFF</button></div></div>
+<div class="controls">
+<div class="control"><label>Slots</label><input id="slots" type="number" value="20" min="1" max="1000"></div>
+<div class="control"><label>UEs</label><input id="ue" type="number" value="8" min="1" max="64"></div>
+<div class="control"><label>Cells</label><input id="cells" type="number" value="3" min="1" max="7"></div>
+<div class="control"><label>PRBs</label><input id="prbs" type="number" value="52" min="1" max="106"></div>
+<div class="control"><label>SCS (kHz)</label><input id="scs" type="number" value="30" min="15" max="60"></div>
+<div class="control"><label>Velocity km/h</label><input id="velocity" type="number" value="30" min="0" max="500"></div>
+</div>
+<div class="kpis">
+<div class="card kpi"><span>Total throughput</span><strong id="throughput">—</strong></div>
+<div class="card kpi"><span>System fairness</span><strong id="fairness">—</strong></div>
+<div class="card kpi"><span>PHY CRC pass</span><strong id="crc">—</strong></div>
+<div class="card kpi"><span>PHY BER</span><strong id="ber">—</strong></div>
+</div>
+<div class="panel card"><div class="top"><strong>Radio environment</strong><span class="status" id="status">Ready</span></div><div class="map" id="map"><div class="grid"></div></div><div class="legend"><span>● UE</span><span>■ Cell</span><span>PRB allocation and link metrics are shown below</span></div></div>
+<div class="panel card table-wrap"><table class="table"><thead><tr><th>UE</th><th>SINR dB</th><th>CQI</th><th>MCS</th><th>Rank</th><th>PRBs</th><th>Throughput Mbps</th><th>BLER</th><th>CRC</th><th>BER</th></tr></thead><tbody id="rows"></tbody></table><div class="note">The V63 bridge aggregates V62 radio states across slots and executes the existing V61 PHY for each UE/slot. This dashboard does not replace V1–V61.</div></div>
+</div>
+<script src="radio-v63.js"></script>
+</body>
+</html>
