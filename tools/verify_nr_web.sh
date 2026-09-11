@@ -2,6 +2,7 @@
 # Additive verification harness for the existing 5G_NR_Simulator web application.
 # It validates observable behavior and standards-consistent parameter domains without
 # changing nr-core, Android architecture, or the existing web API contract.
+# Startup/cache repair is applied separately by the temporary V64 bootstrap workflow.
 set -euo pipefail
 BASE_URL="${BASE_URL:-http://127.0.0.1:8080}"
 PASS=0
