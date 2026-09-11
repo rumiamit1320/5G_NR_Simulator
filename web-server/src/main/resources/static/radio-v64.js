@@ -1,47 +1,46 @@
 // V64 compatibility entry point. The functional HMI controller lives in the additive fixed module.
-// This wrapper also normalizes non-JSON backend responses so the HMI does not fail with
-// "Unexpected token ... in JSON" when Vercel/proxy returns an HTML/text error page.
-//
-// V64 compatibility is intentionally additive: the existing fixed controller and backend
-// contracts remain unchanged. V63 UE fields are mirrored to the legacy V64 display names,
-// and the optional activeUes DOM target is created when the current HMI does not contain it.
+// Existing backend/controller contracts remain unchanged.
 (() => {
   const nativeFetch = window.fetch.bind(window);
   window.fetch = async (input, init) => {
     const response = await nativeFetch(input, init);
     const url = typeof input === 'string' ? input : input?.url || '';
-    if (url.includes('/api/')) {
-      const clone = response.clone();
-      const text = await clone.text();
-      try {
-        const payload = JSON.parse(text);
-        if (url.includes('/api/lab') && payload && Array.isArray(payload.ueStates)) {
-          payload.ueStates = payload.ueStates.map((ue) => ({
-            ...ue,
-            meanSinrDb: ue.meanSinrDb ?? ue.sinrDb,
-            meanCqi: ue.meanCqi ?? ue.cqi,
-            meanMcs: ue.meanMcs ?? ue.mcs,
-            totalAllocatedPrbs: ue.totalAllocatedPrbs ?? ue.allocatedPrbs,
-            meanBler: ue.meanBler ?? ue.bler
-          }));
-          return new Response(JSON.stringify(payload), {
-            status: response.status,
-            statusText: response.statusText,
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
-      } catch (_) {
-        const message = text.replace(/\s+/g, ' ').trim().slice(0, 300) || 'empty response';
-        return new Response(JSON.stringify({ ok: false, error: `Backend returned non-JSON (${response.status} ${response.statusText}): ${message}` }), {
+    if (!url.includes('/api/')) return response;
+    const clone = response.clone();
+    const text = await clone.text();
+    try {
+      const payload = JSON.parse(text);
+      // Additive V63 -> V64 display-schema compatibility.
+      if (url.includes('/api/lab') && payload && Array.isArray(payload.ueStates)) {
+        payload.ueStates = payload.ueStates.map(ue => ({
+          ...ue,
+          meanSinrDb: ue.meanSinrDb ?? ue.sinrDb,
+          meanCqi: ue.meanCqi ?? ue.cqi,
+          meanMcs: ue.meanMcs ?? ue.mcs,
+          totalAllocatedPrbs: ue.totalAllocatedPrbs ?? ue.allocatedPrbs,
+          meanBler: ue.meanBler ?? ue.bler
+        }));
+        return new Response(JSON.stringify(payload), {
           status: response.status,
           statusText: response.statusText,
           headers: { 'Content-Type': 'application/json' }
         });
       }
+    } catch (_) {
+      const message = text.replace(/\s+/g, ' ').trim().slice(0, 300) || 'empty response';
+      return new Response(JSON.stringify({
+        ok: false,
+        error: `Backend returned non-JSON (${response.status} ${response.statusText}): ${message}`
+      }), {
+        status: response.status,
+        statusText: response.statusText,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
     return response;
   };
 
+  // Compatibility target retained by radio-v64-fixed.js.
   if (!document.getElementById('activeUes')) {
     const activeUes = document.createElement('span');
     activeUes.id = 'activeUes';
@@ -49,80 +48,121 @@
     document.body.appendChild(activeUes);
   }
 
-  // Additive PHY result presentation layer. V20/V21 and the retained controller
-  // remain unchanged; this only converts their textual result into structured cards.
-  const esc = (value) => String(value ?? '').replace(/[&<>\"]/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;'
+  // ---------------------------------------------------------------------------
+  // Additive PHY presentation layer.
+  // V20/V21 continue to execute exactly as before. The retained controller writes
+  // their Kotlin data-class strings into #phyResult; this adapter parses those
+  // strings without changing the underlying PHY implementation.
+  // ---------------------------------------------------------------------------
+  const esc = value => String(value ?? '').replace(/[&<>\"]/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '\"':'&quot;'
   }[c]));
-  const num = (text, key, fallback = '—') => {
-    const m = String(text || '').match(new RegExp(`${key}=([^,\\)]*)`));
-    return m ? m[1].trim() : fallback;
+
+  const field = (text, key, fallback = '—') => {
+    const match = String(text || '').match(new RegExp(`(?:^|[,(\\s])${key}=([^,\\n\\r)]*)`));
+    return match ? match[1].trim() : fallback;
   };
+
+  const status = value => String(value).trim().toLowerCase() === 'true';
+  const statusText = value => status(value) ? 'PASS' : 'FAIL';
+  const statusClass = value => status(value) ? 'phy-good' : 'phy-bad';
+  const row = (label, value, cls = '') =>
+    `<div class="phy-metric"><span>${esc(label)}</span><b class="${cls}">${esc(value)}</b></div>`;
+
   function renderPhyResult(raw) {
     const target = document.getElementById('phyResult');
-    if (!target || !raw || raw === 'Executing…' || !/NrPuschV20Result|NrSrsV21Result/.test(raw)) return;
-    const pusch = raw.match(/PUSCH\s*\/\s*PHY:\s*NrPuschV20Result\(([\s\S]*?)\)\s*SRS/)?.[1] || '';
-    const srs = raw.match(/SRS\s*\/\s*channel probe:\s*NrSrsV21Result\(([\s\S]*)\)\s*$/)?.[1] || '';
-    const tbBits = num(pusch, 'tbBits'), encodedBits = num(pusch, 'encodedBits'), symbols = num(pusch, 'symbols');
-    const layers = num(pusch, 'layers'), rv = num(pusch, 'rv'), crcOk = num(pusch, 'crcOk'), puschPass = num(pusch, 'pass'), puschNote = num(pusch, 'note');
-    const rsrp = num(srs, 'rsrpDb'), sinr = num(srs, 'sinrDb'), rank = num(srs, 'rank'), preferredPort = num(srs, 'preferredPort'), srsPass = num(srs, 'pass'), srsNote = num(srs, 'note');
-    const passClass = v => String(v).toLowerCase() === 'true' ? 'phy-good' : 'phy-bad';
-    const statusText = v => String(v).toLowerCase() === 'true' ? 'PASS' : 'FAIL';
-    const row = (label, value, cls = '') => `<div class="phy-metric"><span>${esc(label)}</span><b class="${cls}">${esc(value)}</b></div>`;
+    if (!target || !raw || raw === 'Executing…') return false;
+    if (!raw.includes('NrPuschV20Result') || !raw.includes('NrSrsV21Result')) return false;
+
+    // Split at the known controller delimiter instead of relying on parentheses.
+    // This is robust to the parentheses contained inside the V20 note text.
+    const parts = raw.split(/\n\s*SRS\s*\/\s*channel probe:\s*/i);
+    const puschText = parts[0].replace(/^.*?NrPuschV20Result\(/s, '');
+    const srsText = (parts[1] || '').replace(/^NrSrsV21Result\(/s, '');
+
+    const tbBits = field(puschText, 'tbBits');
+    const encodedBits = field(puschText, 'encodedBits');
+    const symbols = field(puschText, 'symbols');
+    const layers = field(puschText, 'layers');
+    const rv = field(puschText, 'rv');
+    const crcOk = field(puschText, 'crcOk');
+    const puschPass = field(puschText, 'pass');
+    const puschNote = field(puschText, 'note');
+
+    const rsrp = field(srsText, 'rsrpDb');
+    const sinr = field(srsText, 'sinrDb');
+    const rank = field(srsText, 'rank');
+    const preferredPort = field(srsText, 'preferredPort');
+    const srsPass = field(srsText, 'pass');
+    const srsNote = field(srsText, 'note');
+
     target.innerHTML = `
       <div class="phy-result-grid">
         <section class="phy-result-card">
-          <div class="phy-result-head"><div><strong>PUSCH / UL-SCH</strong><small>V20 uplink transport path</small></div><span class="phy-status ${passClass(puschPass)}">● ${statusText(puschPass)}</span></div>
+          <div class="phy-result-head">
+            <div><strong>PUSCH / UL-SCH</strong><small>V20 uplink transport path</small></div>
+            <span class="phy-status ${statusClass(puschPass)}">● ${statusText(puschPass)}</span>
+          </div>
           ${row('Transport Block', tbBits === '—' ? '—' : `${tbBits} bits`)}
           ${row('Encoded Bits', encodedBits === '—' ? '—' : `${encodedBits} bits`)}
           ${row('Modulation Symbols', symbols)}
           ${row('MIMO Layers', layers)}
           ${row('Redundancy Version', rv)}
-          ${row('CRC', statusText(crcOk), passClass(crcOk))}
-          ${row('PHY Check', statusText(puschPass), passClass(puschPass))}
+          ${row('CRC', statusText(crcOk), statusClass(crcOk))}
+          ${row('PHY Check', statusText(puschPass), statusClass(puschPass))}
           ${puschNote !== '—' ? `<div class="phy-note">${esc(puschNote)}</div>` : ''}
         </section>
         <section class="phy-result-card">
-          <div class="phy-result-head"><div><strong>SRS / Channel Probe</strong><small>V21 sounding/channel abstraction</small></div><span class="phy-status ${passClass(srsPass)}">● ${statusText(srsPass)}</span></div>
+          <div class="phy-result-head">
+            <div><strong>SRS / Channel Probe</strong><small>V21 sounding/channel abstraction</small></div>
+            <span class="phy-status ${statusClass(srsPass)}">● ${statusText(srsPass)}</span>
+          </div>
           ${row('RSRP', rsrp === '—' ? '—' : `${rsrp} dB`)}
           ${row('SINR', sinr === '—' ? '—' : `${sinr} dB`)}
           ${row('Estimated Rank', rank)}
           ${row('Preferred Port', preferredPort)}
-          ${row('SRS Check', statusText(srsPass), passClass(srsPass))}
+          ${row('SRS Check', statusText(srsPass), statusClass(srsPass))}
           ${srsNote !== '—' ? `<div class="phy-note">${esc(srsNote)}</div>` : ''}
         </section>
       </div>
-      <div class="phy-implementation-note"><b>Implementation status:</b> Reference/educational PHY path. PUSCH/UL-SCH transport abstraction and SRS channel-probe interfaces are active; this presentation layer does not replace the existing PHY implementation.</div>`;
+      <div class="phy-implementation-note"><b>Implementation status:</b> Reference/educational PHY path. This presentation layer does not replace or alter the existing V20/V21 implementation.</div>`;
+    return true;
   }
+
   function installPhyPresentation() {
-    const target = document.getElementById('phyResult');
-    if (!target || target.dataset.phyPresentationInstalled) return;
-    target.dataset.phyPresentationInstalled = 'true';
     const style = document.createElement('style');
     style.textContent = `
       .phy-result-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
       .phy-result-card{background:#071c30;border:1px solid #15415f;border-radius:6px;padding:12px}
       .phy-result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}
-      .phy-result-head strong{display:block;font-size:13px;color:#e8f4ff}.phy-result-head small{display:block;color:#7891a8;font-size:10px;margin-top:3px}
-      .phy-status{font-size:10px;font-weight:800;white-space:nowrap}.phy-good{color:#00e994}.phy-bad{color:#ff5264}
-      .phy-metric{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #0d2b45;padding:6px 0;font-size:11px}.phy-metric span{color:#9bb0c3}.phy-metric b{color:#e7f5ff}
+      .phy-result-head strong{display:block;font-size:13px;color:#e8f4ff}
+      .phy-result-head small{display:block;color:#7891a8;font-size:10px;margin-top:3px}
+      .phy-status{font-size:10px;font-weight:800;white-space:nowrap}
+      .phy-good{color:#00e994}.phy-bad{color:#ff5264}
+      .phy-metric{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #0d2b45;padding:6px 0;font-size:11px}
+      .phy-metric span{color:#9bb0c3}.phy-metric b{color:#e7f5ff}
       .phy-note{margin-top:9px;padding:8px;border-left:2px solid #159cff;background:#041522;color:#7f9ab1;font-size:9px;line-height:1.4}
-      .phy-implementation-note{margin-top:10px;padding:9px 11px;border:1px solid #123554;border-radius:6px;background:#041522;color:#7891a8;font-size:10px;line-height:1.45}.phy-implementation-note b{color:#a9c3d8}
+      .phy-implementation-note{margin-top:10px;padding:9px 11px;border:1px solid #123554;border-radius:6px;background:#041522;color:#7891a8;font-size:10px;line-height:1.45}
+      .phy-implementation-note b{color:#a9c3d8}
       @media(max-width:700px){.phy-result-grid{grid-template-columns:1fr}}
     `;
     document.head.appendChild(style);
-    const observer = new MutationObserver(() => {
-      const raw = target.textContent || '';
-      if (!target.dataset.phyRendering && /NrPuschV20Result|NrSrsV21Result/.test(raw)) {
-        target.dataset.phyRendering = 'true';
-        observer.disconnect();
-        renderPhyResult(raw);
-        delete target.dataset.phyRendering;
-        observer.observe(target, { childList: true, subtree: true, characterData: true });
+
+    // Poll briefly because the retained controller and this additive adapter are
+    // loaded independently. This avoids racing the controller's PHY result write.
+    let attempts = 0;
+    const timer = setInterval(() => {
+      const target = document.getElementById('phyResult');
+      if (target && renderPhyResult(target.textContent || '')) {
+        clearInterval(timer);
+        // Re-arm after each future PHY check so repeated checks are also formatted.
+        const observer = new MutationObserver(() => renderPhyResult(target.textContent || ''));
+        observer.observe(target, { childList:true, subtree:true, characterData:true });
       }
-    });
-    observer.observe(target, { childList: true, subtree: true, characterData: true });
+      if (++attempts > 100) clearInterval(timer);
+    }, 100);
   }
+
   installPhyPresentation();
 
   const s = document.createElement('script');
