@@ -28,16 +28,38 @@
     while(history.length>MAX) history.shift();
   }
 
+  // The existing HMI uses DIV containers for these four chart IDs.
+  // Create a real canvas inside each container instead of assuming the container itself is a canvas.
+  function canvasFor(id) {
+    const host=$(id);
+    if(!host)return null;
+    if(host instanceof HTMLCanvasElement)return host;
+    let c=host.querySelector('canvas[data-v64-performance-canvas]');
+    if(!c){
+      host.innerHTML='';
+      c=document.createElement('canvas');
+      c.setAttribute('data-v64-performance-canvas','1');
+      c.style.width='100%';
+      c.style.height='150px';
+      c.style.display='block';
+      host.appendChild(c);
+    }
+    return c;
+  }
+
   function resizeCanvas(c) {
-    if (!c) return null;
+    if (!c || !(c instanceof HTMLCanvasElement)) return null;
     const d=window.devicePixelRatio||1, r=c.getBoundingClientRect();
     const w=Math.max(180,r.width), h=Math.max(110,r.height);
     if(c.width!==Math.round(w*d)||c.height!==Math.round(h*d)){c.width=Math.round(w*d);c.height=Math.round(h*d)}
-    const x=c.getContext('2d'); x.setTransform(d,0,0,d,0,0); return {x,w,h};
+    const x=c.getContext('2d');
+    if(!x)return null;
+    x.setTransform(d,0,0,d,0,0);
+    return {x,w,h};
   }
 
   function draw(id,key,label,unit,min,max) {
-    const c=$(id); if(!c) return;
+    const c=canvasFor(id); if(!c)return;
     const q=resizeCanvas(c); if(!q)return; const {x,w,h}=q;
     x.clearRect(0,0,w,h); x.fillStyle='#04101b'; x.fillRect(0,0,w,h);
     const pad={l:42,r:12,t:18,b:25}, pw=w-pad.l-pad.r, ph=h-pad.t-pad.b;
