@@ -114,7 +114,7 @@
       ['Cells', c.cells ?? val('cells')], ['UE count', c.ueCount ?? c.ue ?? val('ue')],
       ['PRBs / cell', c.prbs ?? val('prbs')], ['SCS', `${c.scs ?? val('scs')} kHz`],
       ['UE velocity', `${c.velocityKmh ?? c.velocity ?? val('velocity')} km/h`], ['Simulation slots', c.slots ?? val('slots')],
-      ['Payload', `${c.payloadBits ?? val('payloadBits') || '128'} bits`], ['TX / RX', `${c.tx ?? 4} / ${c.rx ?? 4}`],
+      ['Payload', `${(c.payloadBits ?? val('payloadBits') ?? '128')} bits`], ['TX / RX', `${c.tx ?? 4} / ${c.rx ?? 4}`],
       ['Layers', c.layers ?? 1], ['Mode', 'V64 closed loop']
     ];
   }
