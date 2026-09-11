@@ -16,6 +16,11 @@ fun main() {
         check("V62", r.ueStates.size == 8 && r.ueStates.sumOf { it.allocatedPrbs } == 52 && r.fairness in 0.0..1.0)
         check("V62 tests", NrRadioEnvironmentV62Tests.run().pass)
     }.onFailure { check("V62", false); check("V62 tests", false) }
+    runCatching {
+        val r = NrIntegratedSystemV63.run(NrIntegratedSystemConfigV63(slots = 4, ueCount = 4, prbs = 24, velocityKmh = 30.0))
+        check("V63", r.slotResults.size == 4 && r.ueStates.size == 4 && r.systemFairness in 0.0..1.0 && r.totalThroughputMbps.isFinite())
+        check("V63 tests", NrIntegratedSystemV63Tests.run().pass)
+    }.onFailure { check("V63", false); check("V63 tests", false) }
 
     val all = checks.values.all { it }
     println("CORE_REGRESSION=${if (all) "PASS" else "FAIL"}")
