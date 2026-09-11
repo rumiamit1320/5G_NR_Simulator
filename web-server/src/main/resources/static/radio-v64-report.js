@@ -1,122 +1,267 @@
 // V64 additive PDF report layer.
-// Collects the current HMI state/results without changing V61/V62/V63/V64 engines.
+// Modern engineering-style report presentation without changing V61/V62/V63/V64 engines.
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const esc = v => String(v ?? '').replace(/\s+/g,' ').trim();
-  const val = id => { const e=$(id); return e ? esc(e.value ?? e.textContent) : '—'; };
+  const esc = v => String(v ?? '').replace(/\s+/g, ' ').trim();
+  const val = id => { const e = $(id); return e ? esc(e.value ?? e.textContent) : '—'; };
+  const fmt = (v, digits = 2) => v == null || Number.isNaN(Number(v)) ? '—' : Number(v).toFixed(digits);
+  const pct = (v, digits = 2) => v == null || Number.isNaN(Number(v)) ? '—' : (Number(v) * 100).toFixed(digits) + '%';
 
   function loadJsPdf(done) {
     if (window.jspdf?.jsPDF) return done();
-    const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
-    s.onload=done;
-    s.onerror=()=>alert('PDF library could not be loaded. Check the network connection and try again.');
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+    s.onload = done;
+    s.onerror = () => alert('PDF library could not be loaded. Check the network connection and try again.');
     document.head.appendChild(s);
   }
 
-  function addText(doc, text, x, y, width, lineHeight=13) {
-    const lines=doc.splitTextToSize(String(text||'—'),width);
-    for(const line of lines){
-      if(y>275){doc.addPage();y=22;}
-      doc.text(line,x,y);y+=lineHeight;
+  function pageHeader(doc, section) {
+    doc.setFillColor(8, 18, 32);
+    doc.rect(0, 0, 210, 15, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(9); doc.setFont(undefined, 'bold');
+    doc.text('5G NR SIMULATOR', 14, 9);
+    doc.setFont(undefined, 'normal');
+    doc.text('V64 RADIO ENVIRONMENT LAB', 196, 9, { align: 'right' });
+    doc.setTextColor(20, 30, 40);
+    if (section) {
+      doc.setFontSize(7); doc.setFont(undefined, 'normal');
+      doc.text(section.toUpperCase(), 14, 22);
+    }
+  }
+
+  function footer(doc, reportId) {
+    const pages = doc.getNumberOfPages();
+    for (let p = 1; p <= pages; p++) {
+      doc.setPage(p);
+      doc.setDrawColor(190, 198, 208); doc.line(14, 285, 196, 285);
+      doc.setFontSize(7); doc.setTextColor(100, 110, 120);
+      doc.text(`Report ID: ${reportId}`, 14, 290);
+      doc.text(`Page ${p} / ${pages}`, 196, 290, { align: 'right' });
+    }
+  }
+
+  function addText(doc, text, x, y, width, lineHeight = 12) {
+    const lines = doc.splitTextToSize(String(text || '—'), width);
+    for (const line of lines) {
+      if (y > 278) { doc.addPage(); pageHeader(doc, 'Continuation'); y = 30; }
+      doc.text(line, x, y); y += lineHeight;
     }
     return y;
   }
-  function heading(doc,title,y){
-    if(y>260){doc.addPage();y=22;}
-    doc.setFontSize(14);doc.setFont(undefined,'bold');doc.text(title,14,y);doc.setFont(undefined,'normal');doc.setFontSize(9);return y+8;
-  }
-  function section(doc,title,body,y){
-    y=heading(doc,title,y);return addText(doc,body,14,y,182,12)+5;
+
+  function heading(doc, title, y, section) {
+    if (y > 260) { doc.addPage(); pageHeader(doc, section || title); y = 30; }
+    doc.setFontSize(12); doc.setFont(undefined, 'bold'); doc.setTextColor(15, 35, 55);
+    doc.text(title, 14, y);
+    doc.setDrawColor(55, 115, 160); doc.setLineWidth(0.7); doc.line(14, y + 3, 196, y + 3);
+    doc.setFont(undefined, 'normal'); doc.setFontSize(8); doc.setTextColor(30, 35, 40);
+    return y + 11;
   }
 
-  function config(){
-    return `Cells: ${val('cells')} | UEs: ${val('ue')} | PRBs/cell: ${val('prbs')} | SCS: ${val('scs')} kHz | UE velocity: ${val('velocity')} km/h | Simulation slots: ${val('slots')}`;
+  function section(doc, title, body, y) {
+    y = heading(doc, title, y, title);
+    return addText(doc, body, 14, y, 182, 11) + 5;
   }
 
-  function ueTable(doc,data,y){
-    const us=data?.ueStates||[];
-    if(!us.length)return section(doc,'Per-UE Results','No V63/V64 UE result is currently available.',y);
-    y=heading(doc,'Per-UE Radio / PHY Results',y);
-    const headers=['UE','SINR dB','CQI','MCS','PRBs','Throughput Mbps','BLER','CRC'];
-    const xs=[14,31,51,67,84,104,143,165];
-    doc.setFont(undefined,'bold');headers.forEach((h,i)=>doc.text(h,xs[i],y));doc.setFont(undefined,'normal');y+=6;
-    us.forEach(u=>{
-      if(y>278){doc.addPage();y=22;doc.setFont(undefined,'bold');headers.forEach((h,i)=>doc.text(h,xs[i],y));doc.setFont(undefined,'normal');y+=6;}
-      const row=[u.ueId,u.sinrDb??u.meanSinrDb,u.cqi??u.meanCqi,u.mcs??u.meanMcs,u.allocatedPrbs??u.totalAllocatedPrbs,u.throughputMbps,u.bler??u.meanBler,u.phyCrcPassRate==null?'—':(Number(u.phyCrcPassRate)*100).toFixed(2)+'%'];
-      row.forEach((v,i)=>doc.text(String(v??'—').slice(0,18),xs[i],y));y+=5;
+  function kv(doc, items, y) {
+    const left = items.filter((_, i) => i % 2 === 0);
+    const right = items.filter((_, i) => i % 2 === 1);
+    const rows = Math.max(left.length, right.length);
+    for (let i = 0; i < rows; i++) {
+      if (y > 274) { doc.addPage(); pageHeader(doc, 'Engineering Summary'); y = 30; }
+      const a = left[i], b = right[i];
+      if (a) { doc.setFont(undefined, 'bold'); doc.text(a[0], 16, y); doc.setFont(undefined, 'normal'); doc.text(String(a[1]), 62, y); }
+      if (b) { doc.setFont(undefined, 'bold'); doc.text(b[0], 108, y); doc.setFont(undefined, 'normal'); doc.text(String(b[1]), 154, y); }
+      y += 7;
+    }
+    return y + 3;
+  }
+
+  function cover(doc, meta) {
+    doc.setFillColor(7, 17, 30); doc.rect(0, 0, 210, 297, 'F');
+    doc.setFillColor(42, 112, 155); doc.rect(14, 22, 4, 78, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11); doc.setFont(undefined, 'bold'); doc.text('5G NR SIMULATOR', 28, 35);
+    doc.setFontSize(25); doc.text('V64 RADIO ENVIRONMENT', 28, 58);
+    doc.text('SIMULATION REPORT', 28, 70);
+    doc.setFontSize(10); doc.setFont(undefined, 'normal');
+    doc.setTextColor(190, 205, 218); doc.text('Engineering analysis and simulation results', 28, 82);
+
+    doc.setFillColor(15, 30, 47); doc.roundedRect(28, 112, 154, 72, 3, 3, 'F');
+    doc.setTextColor(130, 190, 220); doc.setFontSize(8); doc.setFont(undefined, 'bold');
+    doc.text('DOCUMENT CONTROL', 38, 126);
+    doc.setTextColor(235, 242, 248); doc.setFont(undefined, 'normal'); doc.setFontSize(9);
+    const rows = [
+      ['Report ID', meta.id],
+      ['Generated by', meta.generatedBy],
+      ['Generated on', meta.generatedOn],
+      ['Application', meta.application],
+      ['Simulation mode', 'Real-Time Closed Loop']
+    ];
+    rows.forEach((r, i) => { const yy = 139 + i * 8; doc.setTextColor(150, 165, 178); doc.text(r[0], 38, yy); doc.setTextColor(240, 245, 248); doc.text(r[1], 82, yy); });
+    doc.setTextColor(140, 155, 168); doc.setFontSize(7);
+    doc.text('Generated from the current V64 HMI state. Existing radio/PHY computation engines are unchanged.', 28, 264);
+    doc.text('5G NR Simulator | V61 PHY + V62 Radio Environment + V63 Integration + V64 Closed Loop', 28, 274);
+    doc.setTextColor(255, 255, 255); doc.setFontSize(7); doc.text('CONFIDENTIAL / ENGINEERING USE', 28, 285);
+  }
+
+  function config(data) {
+    const c = data?.config || {};
+    return [
+      ['Cells', c.cells ?? val('cells')], ['UE count', c.ueCount ?? c.ue ?? val('ue')],
+      ['PRBs / cell', c.prbs ?? val('prbs')], ['SCS', `${c.scs ?? val('scs')} kHz`],
+      ['UE velocity', `${c.velocityKmh ?? c.velocity ?? val('velocity')} km/h`], ['Simulation slots', c.slots ?? val('slots')],
+      ['Payload', `${c.payloadBits ?? val('payloadBits') || '128'} bits`], ['TX / RX', `${c.tx ?? 4} / ${c.rx ?? 4}`],
+      ['Layers', c.layers ?? 1], ['Mode', 'V64 closed loop']
+    ];
+  }
+
+  function ueTable(doc, data, y) {
+    const us = data?.ueStates || [];
+    if (!us.length) return section(doc, 'Per-UE Results', 'No V63/V64 UE result is currently available.', y);
+    y = heading(doc, 'Per-UE Radio / PHY Results', y, 'Per-UE Results');
+    const headers = ['UE', 'SINR', 'CQI', 'MCS', 'PRBs', 'Throughput', 'BLER', 'CRC'];
+    const xs = [14, 30, 50, 66, 82, 101, 143, 165];
+    doc.setFillColor(226, 234, 240); doc.rect(13, y - 5, 184, 8, 'F');
+    doc.setFont(undefined, 'bold'); doc.setFontSize(7); headers.forEach((h, i) => doc.text(h, xs[i], y));
+    doc.setFont(undefined, 'normal'); y += 7;
+    us.forEach((u, idx) => {
+      if (y > 274) { doc.addPage(); pageHeader(doc, 'Per-UE Results'); y = 30; doc.setFillColor(226,234,240); doc.rect(13,y-5,184,8,'F'); doc.setFont(undefined,'bold'); headers.forEach((h,i)=>doc.text(h,xs[i],y)); doc.setFont(undefined,'normal'); y+=7; }
+      if (idx % 2 === 0) { doc.setFillColor(247, 249, 251); doc.rect(13, y - 4, 184, 6.5, 'F'); }
+      const row = [
+        u.ueId, fmt(u.sinrDb ?? u.meanSinrDb, 2), u.cqi ?? u.meanCqi ?? '—', u.mcs ?? u.meanMcs ?? '—',
+        u.allocatedPrbs ?? u.totalAllocatedPrbs ?? '—', fmt(u.throughputMbps, 2),
+        u.bler == null && u.meanBler == null ? '—' : fmt((u.bler ?? u.meanBler) * 100, 3) + '%',
+        u.phyCrcPassRate == null ? '—' : pct(u.phyCrcPassRate, 1)
+      ];
+      row.forEach((v, i) => doc.text(String(v ?? '—').slice(0, 16), xs[i], y)); y += 6;
     });
-    return y+5;
+    return y + 5;
   }
 
-  function rawBlock(doc,title,id,y){
-    const e=$(id);if(!e)return y;
-    const text=esc(e.textContent||e.value||'');
-    if(!text||text==='—'||text==='Running…')return y;
-    return section(doc,title,text,y);
+  function rawBlock(doc, title, id, y) {
+    const e = $(id); if (!e) return y;
+    const text = esc(e.textContent || e.value || '');
+    if (!text || text === '—' || text === 'Running…') return y;
+    return section(doc, title, text, y);
   }
 
-  function logs(doc,y){
-    const rows=Array.from(document.querySelectorAll('#logBody tr[data-v64-log]'));
-    if(!rows.length)return section(doc,'Simulation Log','No log events recorded.',y);
-    y=heading(doc,'Simulation Log',y);
-    rows.forEach(r=>{
-      const c=r.querySelectorAll('td');
-      const line=`[${esc(c[0]?.textContent)}] [${esc(c[1]?.textContent)}] ${esc(c[2]?.textContent)}`;
-      const detail=esc(c[3]?.textContent);
-      y=addText(doc,line,14,y,182,11);
-      if(detail)y=addText(doc,'  '+detail,20,y,176,10);
-      y+=2;
+  function logs(doc, y) {
+    const rows = Array.from(document.querySelectorAll('#logBody tr[data-v64-log]'));
+    if (!rows.length) return section(doc, 'Simulation Log', 'No log events recorded.', y);
+    y = heading(doc, 'Simulation Log', y, 'Simulation Log');
+    rows.forEach(r => {
+      const c = r.querySelectorAll('td');
+      const line = `[${esc(c[0]?.textContent)}] [${esc(c[1]?.textContent)}] ${esc(c[2]?.textContent)}`;
+      const detail = esc(c[3]?.textContent);
+      y = addText(doc, line, 14, y, 182, 10);
+      if (detail) y = addText(doc, 'Detail: ' + detail, 20, y, 176, 9);
+      y += 2;
     });
     return y;
   }
 
-  function report(){
-    loadJsPdf(()=>{
-      const jsPDF=window.jspdf.jsPDF;
-      const doc=new jsPDF({unit:'mm',format:'a4'});
-      const data=window.__v64LastData||{};
-      const metrics=data.metrics||{};
-      let y=18;
-      doc.setFontSize(20);doc.setFont(undefined,'bold');doc.text('5G NR Simulator',14,y);y+=8;
-      doc.setFontSize(13);doc.text('V64 Radio Environment Lab — Simulation Report',14,y);doc.setFont(undefined,'normal');y+=6;
-      doc.setFontSize(8);doc.text(`Generated: ${new Date().toLocaleString()}`,14,y);y+=10;
+  function report() {
+    loadJsPdf(() => {
+      const jsPDF = window.jspdf.jsPDF;
+      const now = new Date();
+      const stamp = now.toISOString().replace(/[:.]/g, '-');
+      const reportId = `V64-${now.getUTCFullYear()}${String(now.getUTCMonth()+1).padStart(2,'0')}${String(now.getUTCDate()).padStart(2,'0')}-${String(now.getUTCHours()).padStart(2,'0')}${String(now.getUTCMinutes()).padStart(2,'0')}${String(now.getUTCSeconds()).padStart(2,'0')}`;
+      const generatedOn = now.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
+      const meta = {
+        id: reportId,
+        generatedBy: '5G NR Simulator V64 HMI',
+        generatedOn,
+        application: '5G_NR_Simulator'
+      };
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      doc.setProperties({
+        title: `5G NR Simulator — V64 Simulation Report ${reportId}`,
+        subject: '5G NR V64 Radio Environment and Closed-Loop Simulation Results',
+        author: '5G NR Simulator V64 HMI',
+        creator: '5G NR Simulator'
+      });
 
-      y=section(doc,'Simulation Configuration',config(),y);
-      y=section(doc,'System Results',
-        `Total throughput: ${metrics.totalThroughputMbps==null?'—':Number(metrics.totalThroughputMbps).toFixed(3)} Mbps\n`+
-        `System fairness: ${metrics.systemFairness==null?'—':Number(metrics.systemFairness).toFixed(5)}\n`+
-        `PHY CRC pass rate: ${metrics.phyCrcPassRate==null?'—':(Number(metrics.phyCrcPassRate)*100).toFixed(3)+'%'}\n`+
-        `PHY BER: ${metrics.phyBer==null?'—':Number(metrics.phyBer).toExponential(4)}\n`+
-        `Samples retained by live performance plots: ${window.__v64Performance?.history?.length??0}`,y);
-      y=ueTable(doc,data,y);
-      y=rawBlock(doc,'PHY Pipeline Result','phyResult',y);
-      y=rawBlock(doc,'MIMO / CSI Result','mimoResult',y);
-      y=rawBlock(doc,'Scheduler Experiment Result','schedulerResult',y);
-      y=rawBlock(doc,'Parameter Sweep Result','sweepResult',y);
-      y=logs(doc,y);
+      const data = window.__v64LastData || {};
+      const metrics = data.metrics || {};
+      cover(doc, meta);
 
-      doc.addPage();y=18;
-      y=heading(doc,'Report Notes',y);
-      y=addText(doc,'This report is a client-side snapshot of the current V64 HMI state. It includes the active simulation configuration, latest V63/V64 radio/PHY metrics, per-UE results, available PHY/MIMO/scheduler/sweep outputs, and the recorded simulation log. Existing V61/V62/V63/V64 computation engines are not modified by the report feature.',14,y,182,12);
-      const history=window.__v64Performance?.history||[];
-      if(history.length){
-        y=heading(doc,'Live Performance History',y+7);
-        const h=['Sample','Throughput Mbps','Avg SINR dB','Avg BLER %','PRB Util %'];
-        const xs=[14,42,80,118,154];doc.setFont(undefined,'bold');h.forEach((v,i)=>doc.text(v,xs[i],y));doc.setFont(undefined,'normal');y+=6;
-        history.forEach((s,i)=>{if(y>278){doc.addPage();y=22;}doc.text(String(i+1),xs[0],y);doc.text(Number(s.throughput||0).toFixed(2),xs[1],y);doc.text(Number(s.sinr||0).toFixed(2),xs[2],y);doc.text(Number(s.bler||0).toFixed(2),xs[3],y);doc.text(Number(s.prb||0).toFixed(2),xs[4],y);y+=5;});
+      doc.addPage(); pageHeader(doc, 'Executive Summary');
+      let y = 31;
+      y = heading(doc, 'Executive Summary', y, 'Executive Summary');
+      y = addText(doc, 'This document records the current V64 real-time closed-loop simulation state, including radio-environment conditions, PHY performance, scheduler behavior and per-UE results. It is intended as an engineering test/report artifact rather than a 3GPP conformance report.', 14, y, 182, 11) + 6;
+
+      y = heading(doc, 'Key Performance Indicators', y, 'Executive Summary');
+      const cards = [
+        ['Total Throughput', metrics.totalThroughputMbps == null ? '—' : fmt(metrics.totalThroughputMbps, 3) + ' Mbps'],
+        ['System Fairness', metrics.systemFairness == null ? '—' : fmt(metrics.systemFairness, 5)],
+        ['PHY CRC Pass Rate', pct(metrics.phyCrcPassRate, 3)],
+        ['PHY BER', metrics.phyBer == null ? '—' : Number(metrics.phyBer).toExponential(4)]
+      ];
+      cards.forEach((c, i) => {
+        const x = 14 + i * 45.5;
+        doc.setFillColor(242, 246, 249); doc.roundedRect(x, y, 42, 25, 2, 2, 'F');
+        doc.setTextColor(80, 95, 108); doc.setFontSize(6.5); doc.setFont(undefined, 'bold'); doc.text(c[0].toUpperCase(), x + 3, y + 7);
+        doc.setTextColor(15, 40, 60); doc.setFontSize(9); doc.text(String(c[1]), x + 3, y + 17); doc.setFont(undefined, 'normal');
+      });
+      y += 34;
+
+      y = heading(doc, 'Document Control & Simulation Configuration', y, 'Configuration');
+      y = kv(doc, [
+        ['Report ID', meta.id], ['Generated by', meta.generatedBy], ['Generated on', meta.generatedOn], ['Software', meta.application],
+        ...config(data)
+      ], y);
+
+      y = ueTable(doc, data, y);
+      y = rawBlock(doc, 'PHY Pipeline Result', 'phyResult', y);
+      y = rawBlock(doc, 'MIMO / CSI Result', 'mimoResult', y);
+      y = rawBlock(doc, 'Scheduler Experiment Result', 'schedulerResult', y);
+      y = rawBlock(doc, 'Parameter Sweep Result', 'sweepResult', y);
+      y = logs(doc, y);
+
+      const history = window.__v64Performance?.history || [];
+      doc.addPage(); pageHeader(doc, 'Performance History'); y = 31;
+      y = heading(doc, 'Live Performance History', y, 'Performance History');
+      y = addText(doc, `The HMI retained ${history.length} live performance samples. Values below are the numerical history used by the live performance plots.`, 14, y, 182, 10) + 4;
+      if (history.length) {
+        const h = ['Sample', 'Throughput Mbps', 'Avg SINR dB', 'Avg BLER %', 'PRB Util %'];
+        const xs = [14, 42, 84, 125, 160];
+        doc.setFillColor(226,234,240); doc.rect(13,y-5,184,8,'F'); doc.setFont(undefined,'bold'); doc.setFontSize(7); h.forEach((v,i)=>doc.text(v,xs[i],y)); doc.setFont(undefined,'normal'); y += 7;
+        history.forEach((s, i) => {
+          if (y > 274) { doc.addPage(); pageHeader(doc, 'Performance History'); y = 30; }
+          if (i % 2 === 0) { doc.setFillColor(247,249,251); doc.rect(13,y-4,184,6.5,'F'); }
+          doc.text(String(i + 1), xs[0], y); doc.text(fmt(s.throughput,2), xs[1], y); doc.text(fmt(s.sinr,2), xs[2], y); doc.text(fmt(s.bler,2), xs[3], y); doc.text(fmt(s.prb,2), xs[4], y); y += 6;
+        });
+      } else {
+        y = addText(doc, 'No live performance history is currently available.', 14, y, 182, 10);
       }
-      const pages=doc.getNumberOfPages();for(let p=1;p<=pages;p++){doc.setPage(p);doc.setFontSize(7);doc.text(`V64 Simulation Report | Page ${p} / ${pages}`,14,290);}
-      doc.save(`5G_NR_V64_Report_${new Date().toISOString().replace(/[:.]/g,'-')}.pdf`);
+
+      doc.addPage(); pageHeader(doc, 'Engineering Notes'); y = 31;
+      y = heading(doc, 'Engineering Notes & Interpretation', y, 'Engineering Notes');
+      y = addText(doc, '• V64 is a closed-loop execution layer. PHY ACK/NACK, BLER and goodput feed scheduler history for subsequent slots.\n• The current V64 implementation uses PHY feedback to influence proportional-fair scheduling; it does not implement true HARQ retransmission/soft combining.\n• V62 provides the radio-environment abstraction, while V61 remains the end-to-end PHY pipeline.\n• Report values represent the state available in the browser at report-generation time.\n• This report is suitable for simulation, education and engineering analysis; it should not be interpreted as a formal 3GPP conformance certificate.', 14, y, 182, 11) + 8;
+      y = heading(doc, 'Result Coverage', y, 'Engineering Notes');
+      y = addText(doc, 'Included where available: simulation configuration, system KPIs, per-UE radio/PHY results, PHY pipeline output, MIMO/CSI output, scheduler experiment output, parameter sweep output, simulation log and live performance history.', 14, y, 182, 11) + 8;
+      y = heading(doc, 'Generation Information', y, 'Engineering Notes');
+      y = kv(doc, [
+        ['Report ID', reportId], ['Generated by', meta.generatedBy], ['Local date/time', generatedOn], ['UTC timestamp', now.toISOString()],
+        ['Application', meta.application], ['Report format', 'A4 / PDF'], ['Simulation mode', 'Real-Time Closed Loop'], ['Data source', 'Current V64 HMI state']
+      ], y);
+
+      footer(doc, reportId);
+      doc.save(`5G_NR_V64_Simulation_Report_${stamp}.pdf`);
     });
   }
 
-  function install(){
-    const actions=document.querySelector('.actions');
-    if(!actions||$('downloadReport'))return !!actions;
-    const b=document.createElement('button');b.id='downloadReport';b.className='btn';b.textContent='▣ Download Report';b.title='Download all current simulation results as a PDF report';b.onclick=report;actions.appendChild(b);
-    return true;
+  function install() {
+    const actions = document.querySelector('.actions');
+    if (!actions || $('downloadReport')) return !!actions;
+    const b = document.createElement('button');
+    b.id = 'downloadReport'; b.className = 'btn'; b.textContent = '▣ Download Report';
+    b.title = 'Download the current simulation results as a modern engineering PDF report';
+    b.onclick = report; actions.appendChild(b); return true;
   }
-  let attempts=0;const timer=setInterval(()=>{if(install()||++attempts>100)clearInterval(timer)},100);
+  let attempts = 0; const timer = setInterval(() => { if (install() || ++attempts > 100) clearInterval(timer); }, 100);
 })();
