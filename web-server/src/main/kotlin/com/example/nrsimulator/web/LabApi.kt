@@ -184,6 +184,28 @@ object LabApi {
                 }
                 "V59" -> ok(NrConformanceV59.run(),false)
                 "V60" -> ok(NrComplianceV60.matrix(),false)
+                "V63" -> {
+                    val cfg = NrIntegratedSystemConfigV63(
+                        slots = q(exchange, "slots", "20").toIntOrNull()?.coerceIn(1, 1000) ?: 20,
+                        ueCount = q(exchange, "ue", "8").toIntOrNull()?.coerceIn(1, 64) ?: 8,
+                        cells = q(exchange, "cells", "3").toIntOrNull()?.coerceIn(1, 7) ?: 3,
+                        prbs = q(exchange, "prbs", "52").toIntOrNull()?.coerceIn(1, 106) ?: 52,
+                        scsKHz = q(exchange, "scs", "30").toIntOrNull() ?: 30,
+                        carrierGHz = q(exchange, "carrier", "3.5").toDoubleOrNull() ?: 3.5,
+                        velocityKmh = q(exchange, "velocity", "30").toDoubleOrNull() ?: 30.0,
+                        snrOffsetDb = q(exchange, "snrOffset", "0").toDoubleOrNull() ?: 0.0,
+                        payloadBitsPerUe = q(exchange, "payloadBits", "128").toIntOrNull() ?: 128,
+                        txAntennas = q(exchange, "tx", "4").toIntOrNull() ?: 4,
+                        rxAntennas = q(exchange, "rx", "4").toIntOrNull() ?: 4,
+                        layers = q(exchange, "layers", "1").toIntOrNull() ?: 1,
+                        seed = q(exchange, "seed", "6301").toIntOrNull() ?: 6301
+                    )
+                    val r = NrIntegratedSystemV63.run(cfg)
+                    val ues = r.ueStates.joinToString(",", prefix = "[", postfix = "]") {
+                        "{\"ueId\":${it.ueId},\"sinrDb\":${it.meanSinrDb},\"cqi\":${it.meanCqi},\"mcs\":${it.meanMcs},\"allocatedPrbs\":${it.totalAllocatedPrbs},\"throughputMbps\":${it.throughputMbps},\"bler\":${it.meanBler},\"phyCrcPassRate\":${it.phyCrcPassRate},\"phyBer\":${it.phyBer}}"
+                    }
+                    "{\"ok\":true,\"version\":\"V63\",\"config\":{\"slots\":${r.slots},\"ueCount\":${r.ueStates.size},\"cells\":${cfg.cells},\"prbs\":${cfg.prbs},\"scs\":${cfg.scsKHz},\"velocityKmh\":${cfg.velocityKmh}},\"metrics\":{\"totalThroughputMbps\":${r.totalThroughputMbps},\"systemFairness\":${r.systemFairness},\"phyCrcPassRate\":${r.phyCrcPassRate},\"phyBer\":${r.phyBer}},\"ueStates\":$ues}"
+                }
                 else -> throw IllegalArgumentException("Unsupported lab version: $version")
             }
             reply(exchange,response)

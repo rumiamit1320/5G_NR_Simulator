@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "===== HTTP smoke-test diagnostics ====="; echo "--- health response ---"; cat /tmp/health.json 2>/dev/null || true; echo "--- simulation response ---"; cat /tmp/sim.json 2>/dev/null || true; echo "--- full-suite response ---"; cat /tmp/suite.json 2>/dev/null || true; echo "--- lab responses ---"; cat /tmp/v19.json 2>/dev/null || true; cat /tmp/v22.json 2>/dev/null || true; cat /tmp/v29.json 2>/dev/null || true; echo "--- web-server.log ---"; cat web-server.log 2>/dev/null || true; fi' EXIT
+          trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "===== HTTP smoke-test diagnostics ====="; echo "--- health response ---"; cat /tmp/health.json 2>/dev/null || true; echo "--- simulation response ---"; cat /tmp/sim.json 2>/dev/null || true; echo "--- full-suite response ---"; cat /tmp/suite.json 2>/dev/null || true; echo "--- lab responses ---"; cat /tmp/v19.json 2>/dev/null || true; cat /tmp/v22.json 2>/dev/null || true; cat /tmp/v29.json 2>/dev/null || true; cat /tmp/v63.json 2>/dev/null || true; echo "--- web-server.log ---"; cat web-server.log 2>/dev/null || true; fi' EXIT
           curl -fsS http://127.0.0.1:8080/api/health >/tmp/health.json
           grep -q '"ok":true' /tmp/health.json
           curl -fsS 'http://127.0.0.1:8080/api/simulate?snr=15&prbs=52&mcs=16&ue=4&tx=4&rx=4&layers=2&mod=64-QAM&scs=30&harq=true' >/tmp/sim.json
@@ -58,11 +58,16 @@ jobs:
           grep -q '"version":"V22"' /tmp/v22.json
           curl -fsS 'http://127.0.0.1:8080/api/lab?version=V29&prbs=52&layers=2' >/tmp/v29.json
           grep -q '"version":"V29"' /tmp/v29.json
+          curl -fsS 'http://127.0.0.1:8080/api/lab?version=V63&slots=2&ue=2&cells=2&prbs=12&scs=30&velocity=30' >/tmp/v63.json
+          grep -q '"version":"V63"' /tmp/v63.json
+          grep -q '"ueStates"' /tmp/v63.json
           curl -fsS http://127.0.0.1:8080/lab.html >/tmp/lab.html
           grep -q '/lab.js' /tmp/lab.html
           curl -fsS http://127.0.0.1:8080/link.html >/tmp/link.html
           grep -q 'V61 End-to-End NR Link' /tmp/link.html
-          echo 'Web API, V19-V60 lab, and V61 link endpoint smoke tests passed.'
+          curl -fsS http://127.0.0.1:8080/radio.html >/tmp/radio.html
+          grep -q 'V63' /tmp/radio.html
+          echo 'Web API, V19-V60 lab, V61 link, and V63 radio dashboard smoke tests passed.'
       - name: Validate end-to-end simulation scenarios
         run: bash tools/validate_web_scenarios.sh
       - name: Validate educational lab visualizations

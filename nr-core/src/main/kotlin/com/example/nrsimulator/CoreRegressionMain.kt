@@ -11,6 +11,21 @@ fun main() {
         val r = NrIntegratedLinkV61.run(NrIntegratedLinkConfigV61(payloadBits = 128, snrDb = 40.0, modulationOrder = 16, layers = 1, txAntennas = 1, rxAntennas = 1))
         check("V61", r.crcPass && r.decodedBits == r.payloadBits && r.bitErrors == 0 && r.ber == 0.0)
     }.onFailure { check("V61", false) }
+    runCatching {
+        val r = NrRadioEnvironmentV62.run(NrRadioEnvironmentConfigV62(ueCount = 8, cells = 3, prbs = 52, velocityKmh = 60.0, slotIndex = 10))
+        check("V62", r.ueStates.size == 8 && r.ueStates.sumOf { it.allocatedPrbs } == 52 && r.fairness in 0.0..1.0)
+        check("V62 tests", NrRadioEnvironmentV62Tests.run().pass)
+    }.onFailure { check("V62", false); check("V62 tests", false) }
+    runCatching {
+        val r = NrIntegratedSystemV63.run(NrIntegratedSystemConfigV63(slots = 4, ueCount = 4, prbs = 24, velocityKmh = 30.0))
+        check("V63", r.slotResults.size == 4 && r.ueStates.size == 4 && r.systemFairness in 0.0..1.0 && r.totalThroughputMbps.isFinite())
+        check("V63 tests", NrIntegratedSystemV63Tests.run().pass)
+    }.onFailure { check("V63", false); check("V63 tests", false) }
+    runCatching {
+        val r = NrClosedLoopV64.run(NrClosedLoopConfigV64(slots = 4, ueCount = 4, cells = 2, prbs = 24, velocityKmh = 60.0, payloadBitsPerUe = 64))
+        check("V64", r.slotResults.size == 4 && r.ueStates.size == 4 && r.fairness in 0.0..1.0 && r.totalThroughputMbps.isFinite())
+        check("V64 tests", NrClosedLoopV64Tests.run().pass)
+    }.onFailure { check("V64", false); check("V64 tests", false) }
 
     val all = checks.values.all { it }
     println("CORE_REGRESSION=${if (all) "PASS" else "FAIL"}")
