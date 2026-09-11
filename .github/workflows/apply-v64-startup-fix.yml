@@ -1,0 +1,64 @@
+name: Apply V64 startup/cache fix
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch V64 startup behavior and cache-bust browser layers
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          html = Path('web-server/src/main/resources/static/radio.html')
+          s = html.read_text()
+          s2 = s.replace('id="liveToggle">▮▮ &nbsp;Live: ON', 'id="liveToggle">▶ &nbsp;Live: OFF')
+          s2 = s2.replace('id="topStatus"><i></i>Running', 'id="topStatus"><i></i>READY')
+          if s2 == s:
+              print('radio.html startup strings already patched')
+          else:
+              html.write_text(s2)
+
+          js = Path('web-server/src/main/resources/static/radio-v64.js')
+          s = js.read_text()
+          # Force the browser to fetch the current additive layers instead of reusing
+          # an older cached fixed controller that could still auto-start Live mode.
+          version = '20260912-2'
+          for name in [
+              'radio-v64-fixed.js','radio-v64-plots.js','radio-v64-mimo-plots.js',
+              'radio-v64-scheduler.js','radio-v64-topology.js','radio-v64-settings.js',
+              'radio-v64-performance.js','radio-v64-velocity.js','radio-v64-report.js'
+          ]:
+              s = s.replace(f"load('/{name}');", f"load('/{name}?v={version}');")
+          js.write_text(s)
+          PY
+
+          node --check web-server/src/main/resources/static/radio-v64.js
+          node --check web-server/src/main/resources/static/radio-v64-fixed.js
+          node --check web-server/src/main/resources/static/radio-v64-performance.js
+
+      - name: Commit and remove bootstrap
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add web-server/src/main/resources/static/radio.html web-server/src/main/resources/static/radio-v64.js
+          git diff --cached --quiet && { echo 'No startup changes required.'; exit 0; }
+          git commit -m '[v64-startup-fix] Disable auto-start and bust stale HMI cache'
+          git push origin HEAD:main
+          git rm .github/workflows/apply-v64-startup-fix.yml
+          git commit -m '[v64-startup-fix] Remove bootstrap workflow'
+          git push origin HEAD:main
