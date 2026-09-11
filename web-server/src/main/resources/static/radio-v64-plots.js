@@ -4,6 +4,31 @@
 const $=id=>document.getElementById(id);
 const H={slots:[],ues:{},max:60,lastSignature:''};
 const num=v=>Number.isFinite(Number(v))?Number(v):0;
+
+// Additive web-only MIMO request adapter. V21/V28 keep their existing contracts;
+// the selectable V64 controls are mapped to the parameters those implementations
+// actually consume: effective rank -> layers/ports, TX/RX -> array dimensions,
+// and beam-sweep OFF -> the minimum supported beam scan.
+const mimoNativeFetch=window.fetch.bind(window);
+window.fetch=async(input,init)=>{
+  let requestInput=input;
+  try{
+    const originalUrl=typeof input==='string'?input:input?.url||'';
+    if(originalUrl.includes('/api/lab')&&window.__v64MimoState){
+      const u=new URL(originalUrl,window.location.href),version=u.searchParams.get('version'),m=window.__v64MimoState;
+      if(version==='V21'||version==='V28'){
+        const requestedRank=m.rankAdaptive?Math.min(m.tx,m.rx):m.rank;
+        const effectiveRank=Math.max(1,Math.min(4,m.tx,m.rx,requestedRank));
+        u.searchParams.set('layers',String(effectiveRank));
+        u.searchParams.set('tx',String(m.tx));
+        u.searchParams.set('rx',String(m.rx));
+        if(version==='V28') u.searchParams.set('beams',String(m.beamSweep?Math.max(2,m.beams):2));
+        requestInput=u.toString();
+      }
+    }
+  }catch(_){}
+  return mimoNativeFetch(requestInput,init);
+};
 function ensure(){
   const panel=$('panel-radio'); if(!panel||$('v64LivePlots')) return !!$('v64LivePlots');
   const card=document.createElement('div'); card.id='v64LivePlots'; card.className='card v64-live-plots';
