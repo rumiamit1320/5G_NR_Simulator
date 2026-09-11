@@ -1,0 +1,40 @@
+name: Apply V64 Logs UI
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wire additive log presentation layer
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('web-server/src/main/resources/static/radio.html')
+          s=p.read_text()
+          marker='<script src="/radio-v64.js"></script>'
+          addon='<script src="/radio-v64-logs.js"></script>'
+          if addon not in s:
+              if marker not in s:
+                  raise SystemExit('radio-v64.js script tag not found')
+              s=s.replace(marker, marker+addon, 1)
+              p.write_text(s)
+          PY
+      - name: Validate files
+        run: |
+          test -f web-server/src/main/resources/static/radio-v64-logs.js
+          grep -q '/radio-v64-logs.js' web-server/src/main/resources/static/radio.html
+      - name: Commit and remove bootstrap workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/apply-v64-logs-ui.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add web-server/src/main/resources/static/radio.html web-server/src/main/resources/static/radio-v64-logs.js .github/workflows/apply-v64-logs-ui.yml
+          git diff --cached --quiet || git commit -m '[v64-logs-ui] Add copy and detailed simulation logs'
+          git push
