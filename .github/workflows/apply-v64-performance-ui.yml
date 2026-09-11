@@ -1,0 +1,35 @@
+name: Apply V64 performance UI
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: contains(github.event.head_commit.message, '[v64-performance-ui]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch adapter loader
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('web-server/src/main/resources/static/radio-v64.js')
+          s = p.read_text(encoding='utf-8')
+          marker = "load('/radio-v64-settings.js');"
+          loader = "load('/radio-v64-performance.js');"
+          if loader not in s:
+              if marker not in s:
+                  raise SystemExit('settings loader marker not found')
+              s = s.replace(marker, marker + "\n    " + loader, 1)
+              p.write_text(s, encoding='utf-8')
+          print('performance adapter wired')
+      - name: Remove bootstrap workflow
+        run: rm -f .github/workflows/apply-v64-performance-ui.yml
+      - name: Commit and push
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add web-server/src/main/resources/static/radio-v64.js .github/workflows/apply-v64-performance-ui.yml
+          git commit -m '[v64-performance-ui] Wire live Radio Environment plots' || exit 0
+          git push
