@@ -129,6 +129,84 @@
     return true;
   }
 
+  // ---------------------------------------------------------------------------
+  // Additive PHY layout adapter.
+  // Only rearranges existing DOM nodes/CSS on the V64 PHY tab. No controller,
+  // backend API, V20/V21, V61, V62 or V63 logic is changed.
+  // ---------------------------------------------------------------------------
+  function installPhyLayout() {
+    const apply = () => {
+      const panel = document.getElementById('panel-phy');
+      const grid = panel?.querySelector('.panelGrid');
+      if (!panel || !grid) return false;
+
+      const chain = grid.querySelector('.pipeline')?.closest('.bigCard');
+      const experiment = grid.querySelector('#phySnr')?.closest('.bigCard');
+      if (!chain || !experiment) return false;
+
+      chain.classList.add('phy-chain-card');
+      experiment.classList.add('phy-experiment-card');
+
+      // Put the PHY controls/results first and the reference chain underneath.
+      if (grid.firstElementChild !== experiment) grid.insertBefore(experiment, grid.firstElementChild);
+
+      // Compact the existing four controls plus the Run button into one row.
+      if (!experiment.querySelector('.phy-control-row')) {
+        const row = document.createElement('div');
+        row.className = 'phy-control-row';
+        const title = experiment.querySelector('.title');
+        const fields = Array.from(experiment.querySelectorAll(':scope > .field'));
+        const actions = experiment.querySelector(':scope > .actions');
+        fields.forEach(el => row.appendChild(el));
+        if (actions) row.appendChild(actions);
+        if (title) title.after(row);
+      }
+      return true;
+    };
+
+    const style = document.createElement('style');
+    style.textContent = `
+      /* V64 PHY: maximize useful viewport area while preserving all existing nodes. */
+      #panel-phy > .panelGrid{display:flex;flex-direction:column;gap:10px}
+      #panel-phy .phy-experiment-card{order:1;padding:14px}
+      #panel-phy .phy-chain-card{order:2;padding:14px}
+      #panel-phy .phy-control-row{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr)) minmax(190px,1.35fr);gap:10px;align-items:end;margin-top:12px}
+      #panel-phy .phy-control-row .field{margin-top:0}
+      #panel-phy .phy-control-row .actions{margin-top:0;display:block}
+      #panel-phy .phy-control-row .actions .btn{width:100%;height:34px;padding:8px 12px}
+      #panel-phy .phy-experiment-card > .output{margin-top:10px;min-height:0;padding:0;border:0;background:transparent;overflow:visible}
+      #panel-phy .phy-result-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+      #panel-phy .phy-result-card{padding:13px}
+      #panel-phy .phy-metric{padding:7px 0}
+      #panel-phy .phy-implementation-note{margin-top:10px}
+      #panel-phy .phy-chain-card .pipeline{grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-top:12px}
+      #panel-phy .phy-chain-card .stage{min-height:78px;padding:11px}
+      #panel-phy .phy-chain-card .stage::after{display:block}
+      #panel-phy .phy-chain-card .stage:nth-child(6n)::after{display:none}
+      @media(max-width:1100px){
+        #panel-phy .phy-control-row{grid-template-columns:repeat(4,minmax(110px,1fr))}
+        #panel-phy .phy-control-row .actions{grid-column:1/-1}
+        #panel-phy .phy-chain-card .pipeline{grid-template-columns:repeat(3,minmax(0,1fr))}
+        #panel-phy .phy-chain-card .stage::after{display:block}
+        #panel-phy .phy-chain-card .stage:nth-child(3n)::after{display:none}
+      }
+      @media(max-width:700px){
+        #panel-phy .phy-control-row{grid-template-columns:1fr 1fr}
+        #panel-phy .phy-control-row .actions{grid-column:1/-1}
+        #panel-phy .phy-chain-card .pipeline{grid-template-columns:1fr 1fr}
+        #panel-phy .phy-chain-card .stage::after{display:none}
+        #panel-phy .phy-result-grid{grid-template-columns:1fr}
+      }
+    `;
+    document.head.appendChild(style);
+
+    if (apply()) return;
+    let attempts = 0;
+    const timer = setInterval(() => {
+      if (apply() || ++attempts > 100) clearInterval(timer);
+    }, 100);
+  }
+
   function installPhyPresentation() {
     const style = document.createElement('style');
     style.textContent = `
@@ -163,6 +241,7 @@
     }, 100);
   }
 
+  installPhyLayout();
   installPhyPresentation();
 
   const s = document.createElement('script');
