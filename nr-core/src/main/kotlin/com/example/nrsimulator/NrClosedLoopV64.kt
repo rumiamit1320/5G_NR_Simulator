@@ -162,6 +162,10 @@ object NrClosedLoopV64 {
                 totalErrors += phy.bitErrors.toLong()
                 if (phy.crcPass) crcPasses++
                 crcTrials++
+                // V61 reports a transport-block CRC result rather than a separate
+                // BLER field. For this one-TB-per-UE laboratory transaction,
+                // BLER is therefore the empirical block error indicator.
+                val blockErrorRate = if (phy.crcPass) 0.0 else 1.0
                 NrClosedLoopUeV64(
                     ueId = u.ueId,
                     xM = u.xM,
@@ -172,7 +176,7 @@ object NrClosedLoopV64 {
                     rank = u.rank,
                     allocatedPrbs = prbs,
                     throughputMbps = observed,
-                    bler = phy.bler,
+                    bler = blockErrorRate,
                     crcPass = phy.crcPass,
                     ber = phy.bitErrors.toDouble() / c.payloadBitsPerUe,
                     harqNack = nack && c.harqEnabled,
