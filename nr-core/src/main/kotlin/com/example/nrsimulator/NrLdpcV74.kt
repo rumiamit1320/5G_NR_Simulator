@@ -17,12 +17,12 @@ object NrLdpcV74 {
     /** Systematic reference encoder for an explicitly supplied full-rank binary parity-check matrix. */
     fun encode(info:IntArray,h:Array<IntArray>):IntArray{
         require(h.isNotEmpty());val n=h[0].size;require(h.all{it.size==n});val k=n-h.size;require(info.size==k){"info length must equal n-m"}
-        val a=Array(h.size){r->IntArray(n+1){c->if(c<n)h[r][c] else 0}}
+        val a=Array(h.size){r->IntArray(n){c->h[r][c]}}
         var row=0
         for(col in 0 until n){
             val p=(row until h.size).firstOrNull{a[it][col]==1}?:continue
             val tmp=a[row];a[row]=a[p];a[p]=tmp
-            for(r in h.indices) if(r!=row&&a[r][col]==1) for(c in col until n) a[r][c]=a[r][c] xor a[row][c]
+            for(r in h.indices) if(r!=row&&a[r][col]==1) for(c in col until n)a[r][c]=a[r][c] xor a[row][c]
             row++;if(row==h.size)break
         }
         require(row==h.size){"parity-check matrix is not full row rank"}
