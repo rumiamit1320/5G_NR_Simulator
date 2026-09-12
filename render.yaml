@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: 5g-nr-simulator
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: research-grade-v74-v81
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PORT
+        value: "10000"

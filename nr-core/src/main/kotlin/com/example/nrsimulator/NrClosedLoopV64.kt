@@ -20,7 +20,12 @@ data class NrClosedLoopConfigV64(
     val layers: Int = 2,
     val seed: Int = 6401,
     val feedbackAlpha: Double = 0.25,
-    val harqEnabled: Boolean = true
+    val harqEnabled: Boolean = true,
+    /**
+     * Optional additive per-UE link-quality correction supplied by a richer
+     * orchestration layer. Empty preserves the exact V64 behavior.
+     */
+    val externalSinrOffsetDbByUe: Map<Int, Double> = emptyMap()
 )
 
 data class NrClosedLoopUeV64(
@@ -87,7 +92,8 @@ object NrClosedLoopV64 {
             txAntennas = config.txAntennas.coerceIn(1, 4),
             rxAntennas = config.rxAntennas.coerceIn(1, 4),
             layers = config.layers.coerceIn(1, minOf(config.txAntennas, config.rxAntennas)),
-            feedbackAlpha = config.feedbackAlpha.coerceIn(0.01, 1.0)
+            feedbackAlpha = config.feedbackAlpha.coerceIn(0.01, 1.0),
+            externalSinrOffsetDbByUe = config.externalSinrOffsetDbByUe.mapValues { it.value.coerceIn(-30.0, 30.0) }
         )
 
         val averages = DoubleArray(c.ueCount) { 1.0 }
@@ -140,10 +146,11 @@ object NrClosedLoopV64 {
 
             val states = radio.ueStates.map { u ->
                 val prbs = grants.getValue(u.ueId)
+                val effectiveSinrDb = (u.sinrDb + c.externalSinrOffsetDbByUe.getOrDefault(u.ueId, 0.0)).coerceIn(-5.0, 40.0)
                 val phy = NrIntegratedLinkV61.run(
                     NrIntegratedLinkConfigV61(
                         payloadBits = c.payloadBitsPerUe,
-                        snrDb = u.sinrDb.coerceIn(-5.0, 40.0),
+                        snrDb = effectiveSinrDb,
                         modulationOrder = modulationForMcs(u.mcs),
                         layers = u.rank.coerceIn(1, c.layers),
                         txAntennas = c.txAntennas,
@@ -162,15 +169,12 @@ object NrClosedLoopV64 {
                 totalErrors += phy.bitErrors.toLong()
                 if (phy.crcPass) crcPasses++
                 crcTrials++
-                // V61 reports a transport-block CRC result rather than a separate
-                // BLER field. For this one-TB-per-UE laboratory transaction,
-                // BLER is therefore the empirical block error indicator.
                 val blockErrorRate = if (phy.crcPass) 0.0 else 1.0
                 NrClosedLoopUeV64(
                     ueId = u.ueId,
                     xM = u.xM,
                     yM = u.yM,
-                    sinrDb = u.sinrDb,
+                    sinrDb = effectiveSinrDb,
                     cqi = u.cqi,
                     mcs = u.mcs,
                     rank = u.rank,
@@ -194,7 +198,10 @@ object NrClosedLoopV64 {
                 fairness = jain(t),
                 crcPassRate = states.count { it.crcPass }.toDouble() / states.size,
                 ber = states.map { it.ber }.average(),
-                schedulerFeedback = "PHY feedback applied: ACK/NACK + goodput -> PF history -> next-slot PRB grant"
+                schedulerFeedback = if (c.externalSinrOffsetDbByUe.isEmpty())
+                    "PHY feedback applied: ACK/NACK + goodput -> PF history -> next-slot PRB grant"
+                else
+                    "PHY feedback + external radio integration offsets applied: beam/channel/MIMO -> SINR -> PHY ACK/NACK -> PF grant"
             )
         }
 
