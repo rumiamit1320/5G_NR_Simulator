@@ -48,6 +48,19 @@
     while (history.length > MAX) history.shift();
   }
 
+  function syncSystemMetrics(data) {
+    const m = data?.metrics || {};
+    const us = Array.isArray(data?.ueStates) ? data.ueStates : [];
+    const prb = utilization(data || {}, us);
+    const throughput = N(m.totalThroughputMbps, NaN);
+    const bler = percentValue(avg(us, u => u.meanBler ?? u.bler));
+    const crc = percentValue(m.phyCrcPassRate);
+    if (finite(throughput) && $('systemThr')) $('systemThr').textContent = throughput.toFixed(1) + ' Mbps';
+    if (finite(prb) && $('systemPrb')) $('systemPrb').textContent = prb.toFixed(1) + '%';
+    if (finite(bler) && $('systemBler')) $('systemBler').textContent = bler.toFixed(2) + '%';
+    if (finite(crc) && $('systemCrc')) $('systemCrc').textContent = crc.toFixed(1) + '%';
+  }
+
   // The existing HMI uses DIV containers for the four chart IDs. Create a canvas inside
   // each container without changing the surrounding DOM or chart API.
   function canvasFor(id) {
@@ -142,11 +155,28 @@
     x.textAlign = 'right'; x.fillText('now', w - pad.r, h - 7);
   }
 
+  function renameChartTitles() {
+    // The renderer below is a time-series view, not a per-UE bar chart. Rename only the
+    // existing headings so the visualization cannot claim a different aggregation.
+    const names = [
+      ['chartThroughput', 'Throughput history'],
+      ['chartSinr', 'Average SINR history'],
+      ['chartBler', 'TB BLER history'],
+      ['chartPrb', 'PRB utilization history']
+    ];
+    names.forEach(([id, text]) => {
+      const host = $(id);
+      const title = host?.closest('.chartCard')?.querySelector('.title h2');
+      if (title) title.textContent = text;
+    });
+  }
+
   function render() {
     draw('chartThroughput', 'throughput', 'THROUGHPUT', 'Mbps', 0, null);
     draw('chartSinr', 'sinr', 'AVERAGE SINR', 'dB', null, null);
     draw('chartBler', 'bler', 'TB BLER', '%', 0, 100);
     draw('chartPrb', 'prb', 'PRB UTILIZATION', '%', 0, 100);
+    renameChartTitles();
   }
 
   function installProvenance() {
@@ -157,8 +187,9 @@
     box.id = 'v64ExecutionContext';
     box.className = 'v64-execution-context';
     box.innerHTML = '<b>Execution provenance</b><span>UI: V64 · Radio lab API: /api/lab · Performance source: V63 integrated radio/PHY result · PHY probe: V20/V21</span><span>V74–V84 research modules remain additive library components; this legacy/reference HMI does not silently claim to execute them.</span><span>Metric definitions: TB BLER = mean UE BLER; PHY CRC pass rate = TB/PHY CRC result fraction; PRB utilization = occupied PRB-time / configured PRB-time, bounded to 0–100%.</span>';
-    const first = panel.querySelector('.wrap, .panelGrid, .layout, .card');
-    (first?.parentElement || panel).insertBefore(box, first || panel.firstChild);
+    const first = panel.querySelector('.panelGrid, .layout, .card');
+    if (first) first.parentElement.insertBefore(box, first);
+    else panel.insertBefore(box, panel.firstChild);
   }
 
   function installStyles() {
@@ -175,7 +206,7 @@
   }
 
   function reset() { history.length = 0; render(); }
-  function ingest(data) { sample(data); render(); }
+  function ingest(data) { sample(data); syncSystemMetrics(data); render(); }
   window.__v64Performance = { ingest, reset, render, history };
 
   function hook() {
