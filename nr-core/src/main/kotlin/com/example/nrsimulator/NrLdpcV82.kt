@@ -2,13 +2,7 @@ package com.example.nrsimulator
 
 /**
  * V82 additive standards-oriented NR LDPC planning layer.
- *
- * This class does not modify or replace NrLdpcV74. It provides the exact
- * NR base-graph dimensions, lifting-size sets, BG selection rules and
- * lifting-size selection boundary needed by the 38.212 LDPC path.
- *
- * The cyclic-shift tables remain behind NrLdpcNrTablesV74 so that no
- * fabricated standardized coefficients are introduced.
+ * Existing NrLdpcV74 remains untouched.
  */
 object NrLdpcV82 {
     enum class BaseGraph { BG1, BG2 }
@@ -44,12 +38,11 @@ object NrLdpcV82 {
         BaseGraph.BG2 -> Geometry(42, 52, 10, 50)
     }
 
-    /** Select the smallest standardized Z that can carry K' bits. */
-    fun selectLiftingSize(bg: BaseGraph, kPrime: Int): Int {
-        require(kPrime > 0)
-        val kb = geometry(bg).informationColumns
+    /** Select the smallest standardized Z for the supplied Kb. */
+    fun selectLiftingSize(bg: BaseGraph, kPrime: Int, kb: Int = geometry(bg).informationColumns): Int {
+        require(kPrime > 0 && kb > 0)
         return allowedLiftingSizes().filter { kb * it >= kPrime }.minOrNull()
-            ?: throw IllegalArgumentException("No NR LDPC lifting size can carry K'=$kPrime")
+            ?: throw IllegalArgumentException("No NR LDPC lifting size can carry K'=$kPrime with Kb=$kb")
     }
 
     fun parityCheckSize(bg: BaseGraph, z: Int): Int = geometry(bg).rows * z
