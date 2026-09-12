@@ -21,7 +21,7 @@ object NrHarqPhyIntegrationV71Tests {
         check("soft metric finite", r.transmissions.all { it.softMetric.isFinite() && it.combinedSoftMetric.isFinite() })
         check("combined metric monotonic", r.transmissions.zipWithNext().all { (a, b) -> b.combinedSoftMetric >= a.combinedSoftMetric })
         check("retransmission accounting", r.retransmissionCount == r.transmissions.size - 1)
-        check("final CRC consistent", r.finalCrcPass == r.transmissions.last().crcPass || r.finalCrcPass)
+        check("final CRC is actual CRC", r.finalCrcPass == r.transmissions.last().crcPass)
 
         val high = NrHarqPhyIntegrationV71.run(
             processId = 1,
