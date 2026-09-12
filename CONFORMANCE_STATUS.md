@@ -28,7 +28,7 @@ V1–V45 remain intact. V46–V60 are additive modules and adapters; V65 is an a
 - V65: additive network orchestration with explicit gNB topology, UE positions, serving-cell association, handover hysteresis, traffic-demand accounting, cell-load KPIs and network-level fairness.
 - V66: additive integrated execution path that composes V65 topology/traffic, V27 mobility, V28 beam selection, V16 TDL/CDL channel characterization, V15 MIMO characterization, V62 radio conditions and V64 closed-loop PHY/scheduler/HARQ.
 - V67: additive NR timing spine exposing numerology, slots/subframe, slots/frame, 10 ms frame timing, 1 ms subframes, slot duration and absolute frame/subframe/slot coordinates while preserving V66 radio execution.
-- V68: additive slot-aware HARQ event layer. It binds V51 HARQ state/RV behavior to V67 transmission and feedback slots, models configurable ACK delay (`k1`-style abstraction), exposes earliest retransmission opportunity after a NACK, and does not fabricate a retransmitted PHY block when V64/V66 did not simulate one.
+- V68: additive slot-aware HARQ event layer. It binds V51 HARQ state/RV behavior to V67 transmission and feedback slots, models configurable ACK delay (`k1`-style abstraction), exposes the earliest retransmission opportunity after a NACK, and does not fabricate a retransmitted PHY block when V64/V66 did not simulate one.
 
 ## Important limitation
 This project is **not 3GPP certified**. ETSI/3GPP normative specifications define substantially more procedure detail and conformance testing than can be established by software round-trip tests alone. Official Release-19 conformance specifications, RF tests, interoperability testing, and applicable certification evidence remain external requirements.
