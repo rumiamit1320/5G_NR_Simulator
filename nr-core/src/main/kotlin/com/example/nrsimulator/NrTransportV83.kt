@@ -16,7 +16,7 @@ object NrTransportV83 {
     /** NR CRC attachment, MSB-first bit convention. */
     fun appendCrc(bits: IntArray, type: CrcType): IntArray {
         val width = when (type) { CrcType.CRC16 -> 16; CrcType.CRC24A, CrcType.CRC24B -> 24 }
-        val poly = when { CrcType.CRC16 -> 0x1021; CrcType.CRC24A -> 0x864CFB; CrcType.CRC24B -> 0x800063 }
+        val poly = when (type) { CrcType.CRC16 -> 0x1021; CrcType.CRC24A -> 0x864CFB; CrcType.CRC24B -> 0x800063 }
         var reg = 0
         val mask = (1 shl width) - 1
         for (bit in bits) {
@@ -30,7 +30,7 @@ object NrTransportV83 {
     }
 
     fun checkCrc(bitsWithCrc: IntArray, type: CrcType): Boolean {
-        val width = if (type == CrcType.Crc16) 16 else 24
+        val width = if (type == CrcType.CRC16) 16 else 24
         require(bitsWithCrc.size >= width)
         return appendCrc(bitsWithCrc.copyOf(bitsWithCrc.size - width), type).contentEquals(bitsWithCrc)
     }
