@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>5G NR Simulator — Implementation Map</title>
+<link rel="stylesheet" href="/app.css">
+<style>
+body{background:#070a10;color:#e9eef7;font-family:Inter,system-ui,sans-serif}.wrap{max-width:1500px;margin:auto;padding:24px}.head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.head h1{margin:5px 0;font-size:28px}.muted{color:#748198;font-size:11px;line-height:1.55}.btn{display:inline-block;border:1px solid #2b3547;background:#141b27;color:#d9e5ff;border-radius:9px;padding:9px 12px;text-decoration:none}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.toolbar input,.toolbar select{background:#0b1018;border:1px solid #263143;color:#eaf1ff;border-radius:8px;padding:10px}.map{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:stretch}.stage{border:1px solid #202838;border-radius:12px;background:#0c121b;padding:13px;min-height:105px;cursor:pointer}.stage:hover,.stage.active{border-color:#5d8fd8;background:#111b29}.v{font-weight:800;font-size:12px;color:#a9c9ff}.name{font-weight:700;margin-top:5px;font-size:13px}.desc{margin-top:5px;font-size:10px;color:#8290a6;line-height:1.45}.tag{display:inline-block;margin-top:8px;font-size:8px;padding:3px 6px;border-radius:999px;border:1px solid #28364a;color:#8fa1ba}.detail{margin-top:14px;border:1px solid #202838;border-radius:12px;background:#0c121b;padding:15px}.detail h2{font-size:16px;margin:0 0 5px}.status{font-size:9px;font-weight:800;letter-spacing:.08em}.implemented{color:#56d69a}.partial{color:#f0c36b}.planned{color:#8a98ad}.flow{margin-top:18px;border:1px solid #202838;border-radius:12px;background:#090e16;padding:15px}.flowrow{display:flex;gap:8px;align-items:center;overflow-x:auto;padding-bottom:4px}.box{min-width:150px;border:1px solid #28364a;border-radius:9px;padding:10px;background:#0d1520}.arrow{color:#64748b;font-size:20px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.card{border:1px solid #202838;border-radius:10px;background:#0c121b;padding:12px}.card h3{font-size:12px;margin:0 0 7px}.card ul{padding-left:18px;margin:0;color:#8996aa;font-size:10px;line-height:1.7}.note{margin-top:14px;border-left:2px solid #35547e;padding:10px;background:#0a1019;color:#8491a6;font-size:10px;line-height:1.55}
+@media(max-width:1050px){.map{grid-template-columns:repeat(3,1fr)}.grid{grid-template-columns:1fr 1fr}}@media(max-width:700px){.wrap{padding:16px}.head{display:block}.head .btn{margin-top:12px}.map,.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main class="wrap">
+<header class="head"><div><div class="muted">5G NEW RADIO · ADDITIVE IMPLEMENTATION VIEW</div><h1>Implementation Map</h1><p class="muted">A visualization layer over the existing simulator. It does not replace the Android UI, Kotlin engines, APIs, or execution paths.</p></div><div><a class="btn" href="/">Main simulator</a> <a class="btn" href="/lab.html">Test laboratory</a></div></header>
+<div class="toolbar"><input id="filter" placeholder="Filter version or feature…"><select id="scope"><option value="all">All versions</option><option value="recent">V61–V84</option><option value="v74">V74–V84 recent upgrade</option><option value="implemented">Implemented</option><option value="partial">Partial / boundary</option></select></div>
+<section class="map" id="map"></section>
+<section class="detail" id="detail"><div class="status implemented">SELECT A MODULE</div><h2>Simulator implementation map</h2><div class="muted">Tap any module to see its role, dependencies and current implementation classification.</div></section>
+<section class="flow"><h2 style="font-size:15px;margin:0 0 10px">Current integrated execution view</h2><div class="flowrow"><div class="box"><div class="v">V65–V66</div><div class="name">Network + radio</div></div><div class="arrow">→</div><div class="box"><div class="v">V67–V70</div><div class="name">Timing + HARQ</div></div><div class="arrow">→</div><div class="box"><div class="v">V71–V73</div><div class="name">Soft PHY</div></div><div class="arrow">→</div><div class="box"><div class="v">V75/V83</div><div class="name">Transport</div></div><div class="arrow">→</div><div class="box"><div class="v">V74/V82</div><div class="name">LDPC</div></div><div class="arrow">→</div><div class="box"><div class="v">V84</div><div class="name">Rate matching</div></div></div></section>
+<section class="grid"><article class="card"><h3>Already present before V74</h3><ul><li>V19–V30 radio/system integration</li><li>V31–V45 conformance expansion</li><li>V46–V60 transport, control and protocol boundaries</li><li>V61–V73 integrated PHY, radio, timing and HARQ/soft-PHY path</li></ul></article><article class="card"><h3>Recent additive upgrade</h3><ul><li>V74 QC-LDPC reference engine</li><li>V75 transport planning abstraction</li><li>V76 waveform boundary</li><li>V77 MIMO receiver boundary</li><li>V78 DCI/grant boundary</li><li>V79 PRACH-like access</li><li>V80 CSI boundary</li><li>V81 persistent system state</li><li>V82 BG1/BG2 + lifting framework</li><li>V83 CRC + code-block segmentation</li><li>V84 RV/rate-matching framework</li></ul></article><article class="card"><h3>Standards boundary</h3><ul><li>Green = implemented reference functionality</li><li>Amber = implemented boundary/research-grade approximation</li><li>Gray = planned or not yet represented here</li><li>Internal round-trip tests are not commercial 3GPP certification</li></ul></article></section>
+<div class="note"><b>Architecture guarantee:</b> this page is a standalone static visualization. The existing simulator execution paths remain the source of truth. The map is intentionally descriptive; it does not duplicate or reimplement the NR algorithms.</div>
+</main>
+<script>
+const modules=[
+['V61','Integrated PHY link','End-to-end laboratory PHY using the established coding, modulation, OFDM and CRC boundaries.','implemented'],
+['V62','Multi-UE / multi-cell radio','Mobility, path loss, shadowing, interference, Doppler, CQI/MCS, rank adaptation and PRB allocation.','implemented'],
+['V63','Radio → PHY bridge','Feeds V62 radio conditions into the V61 PHY path.','implemented'],
+['V64','Closed-loop radio lab','PHY ACK/NACK and goodput feedback into scheduler history; existing radio presentation layer.','implemented'],
+['V65','Network orchestration','gNB topology, UE positions, serving cell, handover hysteresis, traffic demand and network KPIs.','implemented'],
+['V66','Integrated system execution','Composes topology, mobility, beam selection, channel/MIMO characterization, radio conditions and closed-loop PHY.','implemented'],
+['V67','NR timing spine','Numerology, frames, subframes, slots, slot duration and absolute timing coordinates.','implemented'],
+['V68','Slot-aware HARQ','Binds HARQ state/RV behavior to transmission and feedback slots.','implemented'],
+['V69','Persistent HARQ state','Stable transport-block identity, transmission number, RV progression and retransmission opportunities.','implemented'],
+['V70','HARQ execution adapter','Consumes CRC outcomes from the existing integrated timeline for initial and retransmission opportunities.','implemented'],
+['V71','PHY-facing HARQ adapter','Invokes the V61 integrated link for successive RVs while preserving CRC truth.','implemented'],
+['V72','LLR soft buffer','Accumulates repeated transport-bit soft observations.','implemented'],
+['V73','Symbol-derived soft PHY','QAM-derived max-log LLRs, RV-aware soft recovery and soft-input decoding before CRC.','implemented'],
+['V74','QC-LDPC engine','Generic lifted QC-LDPC encoding/decoding foundation used as the reference coding engine.','implemented'],
+['V75','Transport abstraction','Transport/code-block planning boundary retained independently of existing transport APIs.','implemented'],
+['V76','Waveform / OFDM','Reusable baseband OFDM waveform boundary; existing V61 waveform path remains intact.','implemented'],
+['V77','MIMO receiver','Scalar 1×1 channel-estimation/equalization reference boundary; not yet full matrix MIMO.','partial'],
+['V78','DCI / control','Grant metadata and allocation boundary; not yet a complete PDCCH/CORESET/Polar DCI implementation.','partial'],
+['V79','PRACH / random access','Zadoff–Chu based PRACH-like generation/detection reference.','partial'],
+['V80','CSI','CSI measurement/report abstraction and rank handling.','partial'],
+['V81','System state','Persistent UE/bearer/session state foundation.','implemented'],
+['V82','NR LDPC BG1/BG2','BG1/BG2 dimensions, lifting-size sets, selection rules and K_b framework. Complete verified cyclic-shift tables remain the key integration step.','partial'],
+['V83','Transport CRC + segmentation','CRC16/CRC24A/CRC24B and LDPC code-block segmentation sizing/filler boundary.','partial'],
+['V84','Rate matching','RV 0/1/2/3 circular-buffer/rate-matching framework and soft recovery boundary.','partial']
+];
+const map=document.getElementById('map'),detail=document.getElementById('detail'),filter=document.getElementById('filter'),scope=document.getElementById('scope');
+function show(m){detail.innerHTML='<div class="status '+m[3]+'">'+m[3].toUpperCase()+'</div><h2>'+m[0]+' · '+m[1]+'</h2><div class="muted">'+m[2]+'</div>'}
+function render(){const q=filter.value.toLowerCase();const s=scope.value;map.innerHTML=modules.filter(m=>(!q||(m[0]+' '+m[1]+' '+m[2]).toLowerCase().includes(q))).filter(m=>s==='all'||(s==='recent'&&parseInt(m[0].slice(1))>=61)||(s==='v74'&&parseInt(m[0].slice(1))>=74)||(s===m[3])).map((m,i)=>'<button class="stage" data-i="'+modules.indexOf(m)+'"><div class="v">'+m[0]+'</div><div class="name">'+m[1]+'</div><div class="desc">'+m[2]+'</div><span class="tag">'+m[3]+'</span></button>').join('');document.querySelectorAll('.stage').forEach(b=>b.onclick=()=>{document.querySelectorAll('.stage').forEach(x=>x.classList.remove('active'));b.classList.add('active');show(modules[+b.dataset.i])})}
+filter.oninput=render;scope.onchange=render;render();
+</script></body></html>
