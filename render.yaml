@@ -8,3 +8,6 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
     autoDeployTrigger: commit
+    envVars:
+      - key: PORT
+        value: "10000"
