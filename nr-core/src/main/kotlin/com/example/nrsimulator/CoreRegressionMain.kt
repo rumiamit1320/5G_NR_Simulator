@@ -54,7 +54,7 @@ fun main() {
         check("V69 tests", NrHarqExecutionV69Tests.run().pass)
     }.onFailure { check("V69", false); check("V69 tests", false) }
     runCatching {
-        val r = NrHarqExecutionV70.run(NrIntegratedNetworkConfigV66(slots = 8, ueCount = 4, cells = 2, prbs = 24, scsKHz = 30, seed = 7001), NrHarqExecutionConfigV70(extraSlotsForRetransmissions = 16))
+        val r = NrHarqExecutionV70.run(NrIntegratedNetworkConfigV66(slots = 8, ueCount = 4, cells = 2, prbs = 24, velocityKmh = 60.0, seed = 7001), NrHarqExecutionConfigV70(extraSlotsForRetransmissions = 16))
         check("V70", r.events.isNotEmpty() && r.ackCount + r.nackCount == r.events.size)
         check("V70 tests", NrHarqExecutionV70Tests.run().pass)
     }.onFailure { check("V70", false); check("V70 tests", false) }
