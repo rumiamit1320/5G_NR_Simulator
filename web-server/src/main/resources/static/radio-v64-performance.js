@@ -9,11 +9,9 @@
   const N = (v, d = 0) => Number.isFinite(Number(v)) ? Number(v) : d;
   const finite = v => Number.isFinite(Number(v));
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  const pct = v => clamp(N(v) * 100, 0, 100);
   const percentValue = v => {
     const n = N(v, NaN);
     if (!Number.isFinite(n)) return NaN;
-    // BLER/CRC values in the V63 API are fractions; utilizationPercent is already 0..100.
     return n <= 1 ? n * 100 : n;
   };
   const avg = (us, key) => us.reduce((a, u) => a + N(typeof key === 'function' ? key(u) : u[key]), 0) / Math.max(1, us.length);
@@ -22,9 +20,6 @@
     const m = data.metrics || {};
     const direct = m.utilizationPercent ?? m.prbUtilizationPercent ?? m.prbUtilization;
     if (finite(direct)) return clamp(percentValue(direct), 0, 100);
-
-    // Fallback for older payloads: allocated PRBs are cumulative over slots, so include slots
-    // in the denominator. Keep the final display bounded to the physical 0..100% range.
     const cfg = data.config || {};
     const slots = Math.max(1, N(cfg.slots, 1));
     const cells = Math.max(1, N(cfg.cells, 1));
@@ -61,8 +56,6 @@
     if (finite(crc) && $('systemCrc')) $('systemCrc').textContent = crc.toFixed(1) + '%';
   }
 
-  // The existing HMI uses DIV containers for the four chart IDs. Create a canvas inside
-  // each container without changing the surrounding DOM or chart API.
   function canvasFor(id) {
     const host = $(id);
     if (!host) return null;
@@ -87,10 +80,7 @@
     const w = Math.max(180, r.width || c.parentElement?.clientWidth || 180);
     const h = Math.max(110, r.height || c.parentElement?.clientHeight || 150);
     const width = Math.round(w * d), height = Math.round(h * d);
-    if (c.width !== width || c.height !== height) {
-      c.width = width;
-      c.height = height;
-    }
+    if (c.width !== width || c.height !== height) { c.width = width; c.height = height; }
     const x = c.getContext('2d');
     if (!x) return null;
     x.setTransform(d, 0, 0, d, 0, 0);
@@ -104,26 +94,21 @@
     if (!q) return;
     const { x, w, h } = q;
     x.clearRect(0, 0, w, h);
-    x.fillStyle = '#04101b';
-    x.fillRect(0, 0, w, h);
+    x.fillStyle = '#04101b'; x.fillRect(0, 0, w, h);
     const pad = { l: 42, r: 12, t: 18, b: 25 };
     const pw = Math.max(1, w - pad.l - pad.r), ph = Math.max(1, h - pad.t - pad.b);
     const vals = history.map(z => N(z[key], NaN));
     let lo = min, hi = max;
     if (min === null || max === null) {
       const f = vals.filter(Number.isFinite);
-      const a = f.length ? Math.min(...f) : 0;
-      const b = f.length ? Math.max(...f) : 1;
+      const a = f.length ? Math.min(...f) : 0, b = f.length ? Math.max(...f) : 1;
       const span = Math.max(0.5, b - a);
-      lo = Math.max(0, a - span * 0.15);
-      hi = b + span * 0.15;
+      lo = Math.max(0, a - span * 0.15); hi = b + span * 0.15;
       if (key === 'throughput') lo = 0;
     }
     if (!Number.isFinite(lo)) lo = 0;
     if (!Number.isFinite(hi) || hi <= lo) hi = lo + 1;
-
-    x.strokeStyle = '#15344d';
-    x.lineWidth = 1;
+    x.strokeStyle = '#15344d'; x.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
       const yy = pad.t + ph * i / 4;
       x.beginPath(); x.moveTo(pad.l, yy); x.lineTo(w - pad.r, yy); x.stroke();
@@ -132,7 +117,6 @@
     }
     x.fillStyle = '#7f9ab1'; x.font = '9px system-ui'; x.textAlign = 'left'; x.fillText(label, pad.l, pad.t - 6);
     x.textAlign = 'right'; x.fillText(unit, w - pad.r, pad.t - 6);
-
     const points = vals.map((v, i) => ({ v, i })).filter(p => Number.isFinite(p.v));
     if (points.length > 1) {
       x.beginPath();
@@ -156,19 +140,8 @@
   }
 
   function renameChartTitles() {
-    // The renderer below is a time-series view, not a per-UE bar chart. Rename only the
-    // existing headings so the visualization cannot claim a different aggregation.
-    const names = [
-      ['chartThroughput', 'Throughput history'],
-      ['chartSinr', 'Average SINR history'],
-      ['chartBler', 'TB BLER history'],
-      ['chartPrb', 'PRB utilization history']
-    ];
-    names.forEach(([id, text]) => {
-      const host = $(id);
-      const title = host?.closest('.chartCard')?.querySelector('.title h2');
-      if (title) title.textContent = text;
-    });
+    const names = [['chartThroughput','Throughput history'],['chartSinr','Average SINR history'],['chartBler','TB BLER history'],['chartPrb','PRB utilization history']];
+    names.forEach(([id, text]) => { const host = $(id); const title = host?.closest('.chartCard')?.querySelector('.title h2'); if (title) title.textContent = text; });
   }
 
   function render() {
@@ -183,26 +156,38 @@
     if (document.getElementById('v64ExecutionContext')) return;
     const panel = $('panel-performance');
     if (!panel) return;
-    const box = document.createElement('div');
-    box.id = 'v64ExecutionContext';
-    box.className = 'v64-execution-context';
+    const box = document.createElement('div'); box.id = 'v64ExecutionContext'; box.className = 'v64-execution-context';
     box.innerHTML = '<b>Execution provenance</b><span>UI: V64 · Radio lab API: /api/lab · Performance source: V63 integrated radio/PHY result · PHY probe: V20/V21</span><span>V74–V84 research modules remain additive library components; this legacy/reference HMI does not silently claim to execute them.</span><span>Metric definitions: TB BLER = mean UE BLER; PHY CRC pass rate = TB/PHY CRC result fraction; PRB utilization = occupied PRB-time / configured PRB-time, bounded to 0–100%.</span>';
     const first = panel.querySelector('.panelGrid, .layout, .card');
-    if (first) first.parentElement.insertBefore(box, first);
-    else panel.insertBefore(box, panel.firstChild);
+    if (first) first.parentElement.insertBefore(box, first); else panel.insertBefore(box, panel.firstChild);
+  }
+
+  function installCurrentStackContext() {
+    if (document.getElementById('v74v84Context')) return;
+    const panel = $('panel-phy');
+    if (!panel) return;
+    const box = document.createElement('div');
+    box.id = 'v74v84Context';
+    box.className = 'v74v84-context';
+    box.innerHTML = '<div class="v74v84-head"><b>Current NR research stack · V74–V84</b><span>ADDITIVE · NOT A REPLACEMENT</span></div><div class="v74v84-chain"><span>TB + CRC</span><i>→</i><span>Segmentation</span><i>→</i><span>LDPC BG1/BG2</span><i>→</i><span>Rate Matching</span><i>→</i><span>QAM / Grid</span><i>→</i><span>OFDM / Channel</span><i>→</i><span>MIMO / Decode</span><i>→</i><span>CRC Check</span></div><p>V20/V21 below is retained as the legacy PHY reference check. V74–V84 is not mislabeled as V20/V21; its current research-grade coding modules remain available through the additive nr-core path.</p><a href="/implementation-map.html" class="v74v84-link">Open implementation map →</a>';
+    const target = panel.querySelector('.bigCard, .panelGrid, .layout');
+    if (target) target.parentElement.insertBefore(box, target); else panel.insertBefore(box, panel.firstChild);
+
+    const backend = panel.querySelector('.bigCard .title small, .card .title small');
+    if (backend && /V20\s*\/\s*V21/i.test(backend.textContent)) backend.textContent = 'V20 / V21 legacy reference';
+    panel.querySelectorAll('*').forEach(el => {
+      if (el.children.length === 0 && el.textContent.includes('V61 reference path')) el.textContent = el.textContent.replace('V61 reference path', 'V61 legacy reference path');
+    });
   }
 
   function installStyles() {
     if (document.getElementById('v64PerformanceFixStyle')) return;
-    const style = document.createElement('style');
-    style.id = 'v64PerformanceFixStyle';
+    const style = document.createElement('style'); style.id = 'v64PerformanceFixStyle';
     style.textContent = `
-      .v64-execution-context{margin:0 0 10px;padding:10px 12px;border:1px solid #15415f;border-left:3px solid #16a9ff;border-radius:6px;background:#061827;color:#9fb5c8;font-size:10px;line-height:1.55;display:grid;gap:3px}
-      .v64-execution-context b{color:#e6f4ff;font-size:11px}
-      .v64-execution-context span{display:block}
+      .v64-execution-context{margin:0 0 10px;padding:10px 12px;border:1px solid #15415f;border-left:3px solid #16a9ff;border-radius:6px;background:#061827;color:#9fb5c8;font-size:10px;line-height:1.55;display:grid;gap:3px}.v64-execution-context b{color:#e6f4ff;font-size:11px}.v64-execution-context span{display:block}
+      .v74v84-context{margin:0 0 10px;padding:13px;border:1px solid #244a6a;border-left:3px solid #a35cff;border-radius:7px;background:linear-gradient(145deg,#081b2e,#061424);color:#a9c2d7;font-size:10px;line-height:1.5}.v74v84-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.v74v84-head b{color:#eef7ff;font-size:13px}.v74v84-head span{color:#c28aff;font-size:9px;font-weight:800;letter-spacing:.06em}.v74v84-chain{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:10px}.v74v84-chain span{padding:5px 7px;border:1px solid #315a7b;border-radius:5px;background:#07192b;color:#d4e8f7;font-weight:650}.v74v84-chain i{font-style:normal;color:#7898b3}.v74v84-context p{margin:9px 0 7px;color:#8099af}.v74v84-link{color:#63c4ff;text-decoration:none;font-weight:700}.v74v84-link:hover{text-decoration:underline}
       #chartThroughput,#chartSinr,#chartBler,#chartPrb{width:100%;height:150px;display:block;background:#04101b;border-radius:4px}
-    `;
-    document.head.appendChild(style);
+    `; document.head.appendChild(style);
   }
 
   function reset() { history.length = 0; render(); }
@@ -211,27 +196,17 @@
 
   function hook() {
     const d = window.__v64LastData;
-    if (d && window.__v64PerformanceLast !== d) {
-      window.__v64PerformanceLast = d;
-      ingest(d);
-    }
-    installProvenance();
-    render();
+    if (d && window.__v64PerformanceLast !== d) { window.__v64PerformanceLast = d; ingest(d); }
+    installProvenance(); installCurrentStackContext(); render();
   }
 
   function boot() {
-    installStyles();
-    installProvenance();
-    render();
+    installStyles(); installProvenance(); installCurrentStackContext(); render();
     if (!window.__v64PerformanceTimer) window.__v64PerformanceTimer = setInterval(hook, 250);
   }
 
-  // DOM-ready + delayed retries make the renderer resilient to the HMI's dynamic tab lifecycle.
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
-  else boot();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true }); else boot();
   [100, 400, 1000, 2000].forEach(ms => setTimeout(boot, ms));
-  window.addEventListener('resize', render);
-  window.addEventListener('pageshow', render);
-  const resetButton = $('reset');
-  if (resetButton) resetButton.addEventListener('click', () => setTimeout(reset, 0));
+  window.addEventListener('resize', render); window.addEventListener('pageshow', render);
+  const resetButton = $('reset'); if (resetButton) resetButton.addEventListener('click', () => setTimeout(reset, 0));
 })();
