@@ -45,6 +45,14 @@ fun main() {
         check("V67", r.slotResults.size == 3 && r.timing.numerology == 1 && r.timing.slotsPerFrame == 20)
         check("V67 tests", NrTimingV67Tests.run().pass)
     }.onFailure { check("V67", false); check("V67 tests", false) }
+    runCatching {
+        val timed = NrTimingV67.run(
+            NrIntegratedNetworkConfigV66(slots = 8, ueCount = 4, cells = 2, prbs = 24, scsKHz = 30, seed = 6801)
+        )
+        val r = NrHarqTimingV68.run(timed, NrHarqTimingConfigV68(processesPerUe = 8, downlinkAckDelaySlots = 4))
+        check("V68", r.events.isNotEmpty() && r.ackCount + r.nackCount == r.events.size)
+        check("V68 tests", NrHarqTimingV68Tests.run().pass)
+    }.onFailure { check("V68", false); check("V68 tests", false) }
 
     val all = checks.values.all { it }
     println("CORE_REGRESSION=${if (all) "PASS" else "FAIL"}")
