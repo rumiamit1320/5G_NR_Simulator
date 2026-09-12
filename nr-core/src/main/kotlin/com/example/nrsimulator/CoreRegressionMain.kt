@@ -26,6 +26,11 @@ fun main() {
         check("V64", r.slotResults.size == 4 && r.ueStates.size == 4 && r.fairness in 0.0..1.0 && r.totalThroughputMbps.isFinite())
         check("V64 tests", NrClosedLoopV64Tests.run().pass)
     }.onFailure { check("V64", false); check("V64 tests", false) }
+    runCatching {
+        val r = NrNetworkSimulationV65.run(NrNetworkSimulationConfigV65(slots = 4, ueCount = 6, cells = 3, prbs = 24, velocityKmh = 60.0))
+        check("V65", r.slotResults.size == 4 && r.cells.size == 3 && r.ueStates.size == 6 && r.totalThroughputMbps.isFinite())
+        check("V65 tests", NrNetworkSimulationV65Tests.run().pass)
+    }.onFailure { check("V65", false); check("V65 tests", false) }
 
     val all = checks.values.all { it }
     println("CORE_REGRESSION=${if (all) "PASS" else "FAIL"}")
