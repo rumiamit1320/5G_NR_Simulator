@@ -1,6 +1,6 @@
 // V64 additive live-performance presentation layer.
 // Existing V20/V21/V28/V63 backend contracts and engines remain unchanged.
-// This file fixes presentation-only lifecycle/metric issues; it does not replace any simulator path.
+// This file fixes presentation-only lifecycle/metric issues and adds a navigation entry to the additive V74–V84 path.
 (() => {
   'use strict';
   const MAX = 60;
@@ -180,6 +180,26 @@
     });
   }
 
+  // Add a separate entry point next to the existing legacy "Run PHY Check" control.
+  // The legacy button is not modified or replaced; this button only navigates to /current-nr.html.
+  function installCurrentNrButton() {
+    if (document.querySelector('[data-current-nr-entry]')) return true;
+    const buttons = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"]'));
+    const legacy = buttons.find(el => /^\s*run\s+phy\s+check\s*$/i.test((el.value || el.textContent || '').trim()));
+    if (!legacy || !legacy.parentElement) return false;
+
+    const current = document.createElement('button');
+    current.type = 'button';
+    current.setAttribute('data-current-nr-entry', '1');
+    current.textContent = 'Current NR · V74–V84';
+    current.className = legacy.className;
+    current.title = 'Open the additive V74–V84 Current NR coding path';
+    current.addEventListener('click', () => { window.location.href = '/current-nr.html'; });
+
+    legacy.insertAdjacentElement('afterend', current);
+    return true;
+  }
+
   function installStyles() {
     if (document.getElementById('v64PerformanceFixStyle')) return;
     const style = document.createElement('style'); style.id = 'v64PerformanceFixStyle';
@@ -187,6 +207,7 @@
       .v64-execution-context{margin:0 0 10px;padding:10px 12px;border:1px solid #15415f;border-left:3px solid #16a9ff;border-radius:6px;background:#061827;color:#9fb5c8;font-size:10px;line-height:1.55;display:grid;gap:3px}.v64-execution-context b{color:#e6f4ff;font-size:11px}.v64-execution-context span{display:block}
       .v74v84-context{margin:0 0 10px;padding:13px;border:1px solid #244a6a;border-left:3px solid #a35cff;border-radius:7px;background:linear-gradient(145deg,#081b2e,#061424);color:#a9c2d7;font-size:10px;line-height:1.5}.v74v84-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.v74v84-head b{color:#eef7ff;font-size:13px}.v74v84-head span{color:#c28aff;font-size:9px;font-weight:800;letter-spacing:.06em}.v74v84-chain{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:10px}.v74v84-chain span{padding:5px 7px;border:1px solid #315a7b;border-radius:5px;background:#07192b;color:#d4e8f7;font-weight:650}.v74v84-chain i{font-style:normal;color:#7898b3}.v74v84-context p{margin:9px 0 7px;color:#8099af}.v74v84-link{color:#63c4ff;text-decoration:none;font-weight:700}.v74v84-link:hover{text-decoration:underline}
       #chartThroughput,#chartSinr,#chartBler,#chartPrb{width:100%;height:150px;display:block;background:#04101b;border-radius:4px}
+      [data-current-nr-entry]{margin-left:8px}
     `; document.head.appendChild(style);
   }
 
@@ -197,11 +218,11 @@
   function hook() {
     const d = window.__v64LastData;
     if (d && window.__v64PerformanceLast !== d) { window.__v64PerformanceLast = d; ingest(d); }
-    installProvenance(); installCurrentStackContext(); render();
+    installProvenance(); installCurrentStackContext(); installCurrentNrButton(); render();
   }
 
   function boot() {
-    installStyles(); installProvenance(); installCurrentStackContext(); render();
+    installStyles(); installProvenance(); installCurrentStackContext(); installCurrentNrButton(); render();
     if (!window.__v64PerformanceTimer) window.__v64PerformanceTimer = setInterval(hook, 250);
   }
 
