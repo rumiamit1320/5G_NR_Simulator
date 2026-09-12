@@ -10,16 +10,16 @@ object NrTransportV83 {
         val crc: IntArray?,
         val fillerBits: Int,
         val k: Int
-    ) {
-        val bits: Int get() = payload.size + (crc?.size ?: 0) + fillerBits
-    }
+    ) { val bits: Int get() = payload.size + (crc?.size ?: 0) + fillerBits }
 
     data class Segmentation(
         val baseGraph: NrLdpcV82.BaseGraph,
         val transportBlockBits: Int,
         val transportCrcType: CrcType,
         val codeBlocks: List<SegmentedCodeBlock>,
-        val fillerBits: Int
+        val fillerBits: Int,
+        val liftingSize: Int,
+        val kPrime: Int
     )
 
     fun crcTypeForTransportBlock(a: Int): CrcType = if (a > 3824) CrcType.CRC24A else CrcType.CRC16
@@ -27,11 +27,7 @@ object NrTransportV83 {
     /** NR CRC attachment, MSB-first bit convention. */
     fun appendCrc(bits: IntArray, type: CrcType): IntArray {
         val width = when (type) { CrcType.CRC16 -> 16; CrcType.CRC24A, CrcType.CRC24B -> 24 }
-        val poly = when (type) {
-            CrcType.CRC16 -> 0x1021
-            CrcType.CRC24A -> 0x864CFB
-            CrcType.CRC24B -> 0x800063
-        }
+        val poly = when (type) { CrcType.CRC16 -> 0x1021; CrcType.CRC24A -> 0x864CFB; CrcType.CRC24B -> 0x800063 }
         var reg = 0
         val mask = (1 shl width) - 1
         for (bit in bits) {
@@ -45,17 +41,12 @@ object NrTransportV83 {
     }
 
     fun checkCrc(bitsWithCrc: IntArray, type: CrcType): Boolean {
-        val width = when (type) { CrcType.CRC16 -> 16; else -> 24 }
+        val width = if (type == CrcType.CRC16) 16 else 24
         require(bitsWithCrc.size >= width)
-        val data = bitsWithCrc.copyOf(bitsWithCrc.size - width)
-        return appendCrc(data, type).contentEquals(bitsWithCrc)
+        return appendCrc(bitsWithCrc.copyOf(bitsWithCrc.size - width), type).contentEquals(bitsWithCrc)
     }
 
-    /**
-     * Performs the TS 38.212 code-block segmentation sizing step. The actual
-     * LDPC cyclic-shift matrix is intentionally supplied separately by the
-     * V82/V74 table boundary.
-     */
+    /** TS 38.212 sizing and segmentation boundary; LDPC matrix lookup remains separate. */
     fun segment(transportBlock: IntArray, baseGraph: NrLdpcV82.BaseGraph): Segmentation {
         val a = transportBlock.size
         val tbCrc = crcTypeForTransportBlock(a)
@@ -64,33 +55,34 @@ object NrTransportV83 {
         val kcb = if (baseGraph == NrLdpcV82.BaseGraph.BG1) 8448 else 3840
         val c = if (b <= kcb) 1 else kotlin.math.ceil(b.toDouble() / (kcb - 24)).toInt()
         val l = if (c == 1) 0 else 24
-        val bp = b + c * l
-        val kPrime = kotlin.math.ceil(bp.toDouble() / c).toInt()
+        val bPrime = b + c * l
+        val kPrime = kotlin.math.ceil(bPrime.toDouble() / c).toInt()
         val z = NrLdpcV82.selectLiftingSize(baseGraph, kPrime)
         val kb = when {
             baseGraph == NrLdpcV82.BaseGraph.BG1 -> 22
-            kPrime > 640 -> 10
-            kPrime > 560 -> 9
-            kPrime > 192 -> 8
+            b > 640 -> 10
+            b > 560 -> 9
+            b > 192 -> 8
             else -> 6
         }
         val k = kb * z
         require(k >= kPrime) { "NR LDPC K=$k is smaller than K'=$kPrime" }
-        val f = c * k - bp
-
+        val totalFiller = c * k - bPrime
         val blocks = ArrayList<SegmentedCodeBlock>(c)
-        var offset = 0
-        val baseLen = b / c
-        val remainder = b % c
+        var sourceOffset = 0
+        var fillerRemaining = totalFiller
+        val cbPayloadCapacity = kPrime - l
         for (r in 0 until c) {
-            val len = baseLen + if (r < remainder) 1 else 0
-            val payload = tb.copyOfRange(offset, offset + len)
-            offset += len
+            val localFiller = minOf(fillerRemaining, cbPayloadCapacity)
+            fillerRemaining -= localFiller
+            val payloadLen = cbPayloadCapacity - localFiller
+            val payload = tb.copyOfRange(sourceOffset, sourceOffset + payloadLen)
+            sourceOffset += payloadLen
             val cbCrc = if (c > 1) appendCrc(payload, CrcType.CRC24B) else null
-            val localF = k - len - (cbCrc?.size ?: 0)
-            require(localF >= 0)
-            blocks += SegmentedCodeBlock(r, payload, cbCrc, localF, k)
+            require(payload.size + (cbCrc?.size ?: 0) + localFiller == kPrime)
+            blocks += SegmentedCodeBlock(r, payload, cbCrc, localFiller, k)
         }
-        return Segmentation(baseGraph, a, tbCrc, blocks, f)
+        require(sourceOffset == b && fillerRemaining == 0)
+        return Segmentation(baseGraph, a, tbCrc, blocks, totalFiller, z, kPrime)
     }
 }
