@@ -60,6 +60,7 @@ fun main() {
     }.onFailure { check("V70", false); check("V70 tests", false) }
     runCatching { check("V71 tests", NrHarqPhyIntegrationV71Tests.run().pass) }.onFailure { check("V71 tests", false) }
     runCatching { check("V72 tests", NrHarqSoftBufferV72Tests.run().pass) }.onFailure { check("V72 tests", false) }
+    runCatching { check("V73 tests", NrHarqSoftPhyV73Tests.run().pass) }.onFailure { check("V73 tests", false) }
 
     val all = checks.values.all { it }
     println("CORE_REGRESSION=${if (all) "PASS" else "FAIL"}")
