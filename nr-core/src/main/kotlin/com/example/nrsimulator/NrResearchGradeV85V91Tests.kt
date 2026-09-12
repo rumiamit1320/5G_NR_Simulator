@@ -21,6 +21,24 @@ object NrResearchGradeV85V91Tests {
             ck("V85 BG2 lifting", h.size == 84 && h[0].size == 104 && h.sumOf { row -> row.count { it != 0 } } == 197 * 2)
         } else ck("V85 BG2 lifting", false)
 
+        if (bg1 != null) {
+            val info = IntArray(44) { it and 1 }
+            val encoded = NrLdpcCodecV86.encode(info, bg1, 2, 0)
+            ck("V86 QC-LDPC encode", encoded.bits.size == 136 && NrLdpcCodecV86.syndromeWeight(encoded.bits, encoded.parityCheck) == 0)
+            val llr = DoubleArray(encoded.bits.size) { i -> if (encoded.bits[i] == 0) 8.0 else -8.0 }
+            val decoded = NrLdpcCodecV86.decode(llr, bg1, 2, 0, 20)
+            ck("V86 QC-LDPC decode", decoded.converged && decoded.syndromeWeight == 0 && decoded.bits.copyOf(44).contentEquals(info))
+        } else {
+            ck("V86 QC-LDPC encode", false)
+            ck("V86 QC-LDPC decode", false)
+        }
+
+        if (bg1 != null) {
+            val payload = IntArray(1000) { (it * 7) and 1 }
+            val chain = NrCodingChainV87.encode(payload, 0.5, bg1, 512, 0)
+            ck("V87 coding chain", chain.codeBlocks.isNotEmpty() && chain.codewords.size == chain.codeBlocks.size && chain.rateMatched.all { it.size <= 512 })
+        } else ck("V87 coding chain", false)
+
         val mod = NrPhyMappingV89.modulate(IntArray(8) { it and 1 }, NrPhyMappingV89.Modulation.QPSK)
         ck("V89 QPSK", mod.size == 4 && mod.all { it.re.isFinite() && it.im.isFinite() })
         val layers = NrPhyMappingV89.mapLayers(mod, 2)
