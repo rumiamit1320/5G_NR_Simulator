@@ -54,17 +54,8 @@ object NrHarqTimingV68 {
                 val txSlot = slotResult.timing.absoluteSlot.toInt()
                 val feedbackSlot = txSlot + config.downlinkAckDelaySlots
                 val txNumber = 1
-                // The existing V64/V66 result tells us whether this transmission
-                // decoded. V68 schedules the feedback at k1; it does not invent a
-                // second PHY transmission. A NACK therefore exposes the next RV
-                // and earliest retransmission opportunity without claiming that
-                // retransmission has already been simulated.
                 val process = NrHarqV51.start(NrHarqProcessV51(processId))
-                val feedbackState = if (ue.crcPass) {
-                    NrHarqV51.feedback(process, true)
-                } else {
-                    NrHarqV51.feedback(process, false)
-                }
+                val feedbackState = NrHarqV51.feedback(process, ue.crcPass)
                 val nextSlot = if (!ue.crcPass && txNumber < config.maxTransmissions) feedbackSlot + 1 else null
                 events += NrHarqEventV68(
                     ueId = ue.ueId,
