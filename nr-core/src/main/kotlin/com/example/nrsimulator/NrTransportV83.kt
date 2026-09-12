@@ -3,23 +3,12 @@ package com.example.nrsimulator
 /** Additive TS 38.212 transport-block CRC and LDPC code-block segmentation. */
 object NrTransportV83 {
     enum class CrcType { CRC16, CRC24A, CRC24B }
-
-    data class SegmentedCodeBlock(
-        val index: Int,
-        val payload: IntArray,
-        val crc: IntArray?,
-        val fillerBits: Int,
-        val k: Int
-    ) { val bits: Int get() = payload.size + (crc?.size ?: 0) + fillerBits }
-
+    data class SegmentedCodeBlock(val index: Int, val payload: IntArray, val crc: IntArray?, val fillerBits: Int, val k: Int) {
+        val bits: Int get() = payload.size + (crc?.size ?: 0) + fillerBits
+    }
     data class Segmentation(
-        val baseGraph: NrLdpcV82.BaseGraph,
-        val transportBlockBits: Int,
-        val transportCrcType: CrcType,
-        val codeBlocks: List<SegmentedCodeBlock>,
-        val fillerBits: Int,
-        val liftingSize: Int,
-        val kPrime: Int
+        val baseGraph: NrLdpcV82.BaseGraph, val transportBlockBits: Int, val transportCrcType: CrcType,
+        val codeBlocks: List<SegmentedCodeBlock>, val fillerBits: Int, val liftingSize: Int, val kPrime: Int
     )
 
     fun crcTypeForTransportBlock(a: Int): CrcType = if (a > 3824) CrcType.CRC24A else CrcType.CRC16
@@ -57,7 +46,6 @@ object NrTransportV83 {
         val l = if (c == 1) 0 else 24
         val bPrime = b + c * l
         val kPrime = kotlin.math.ceil(bPrime.toDouble() / c).toInt()
-        val z = NrLdpcV82.selectLiftingSize(baseGraph, kPrime)
         val kb = when {
             baseGraph == NrLdpcV82.BaseGraph.BG1 -> 22
             b > 640 -> 10
@@ -65,6 +53,7 @@ object NrTransportV83 {
             b > 192 -> 8
             else -> 6
         }
+        val z = NrLdpcV82.selectLiftingSize(baseGraph, kPrime, kb)
         val k = kb * z
         require(k >= kPrime) { "NR LDPC K=$k is smaller than K'=$kPrime" }
         val totalFiller = c * k - bPrime
