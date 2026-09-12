@@ -33,7 +33,7 @@ fun main() {
     }.onFailure { check("V65", false); check("V65 tests", false) }
     runCatching {
         val r = NrIntegratedNetworkV66.run(
-            NrIntegratedNetworkConfigV66(slots = 3, ueCount = 4, cells = 2, prbs = 24, velocityKmh = 60.0, seed = 6607)
+            NrIntegratedNetworkConfigV66(slots = 3, ueCount = 4, cells = 2, prbs = 24, scsKHz = 30, seed = 6607)
         )
         check("V66", r.slotResults.size == 3 && r.cells.size == 2 && r.ueStates.size == 4 && r.totalThroughputMbps.isFinite())
         check("V66 tests", NrIntegratedNetworkV66Tests.run().pass)
@@ -53,6 +53,22 @@ fun main() {
         check("V68", r.events.isNotEmpty() && r.ackCount + r.nackCount == r.events.size)
         check("V68 tests", NrHarqTimingV68Tests.run().pass)
     }.onFailure { check("V68", false); check("V68 tests", false) }
+    runCatching {
+        val timed = NrTimingV67.run(
+            NrIntegratedNetworkConfigV66(slots = 8, ueCount = 4, cells = 2, prbs = 24, scsKHz = 30, seed = 6901)
+        )
+        val r = NrHarqExecutionV69.run(timed)
+        check("V69", r.transmissions.isNotEmpty() && r.ackCount + r.nackCount == r.transmissions.size)
+        check("V69 tests", NrHarqExecutionV69Tests.run().pass)
+    }.onFailure { check("V69", false); check("V69 tests", false) }
+    runCatching {
+        val r = NrHarqExecutionV70.run(
+            NrIntegratedNetworkConfigV66(slots = 8, ueCount = 4, cells = 2, prbs = 24, scsKHz = 30, seed = 7001),
+            NrHarqExecutionConfigV70(extraSlotsForRetransmissions = 16)
+        )
+        check("V70", r.events.isNotEmpty() && r.ackCount + r.nackCount == r.events.size)
+        check("V70 tests", NrHarqExecutionV70Tests.run().pass)
+    }.onFailure { check("V70", false); check("V70 tests", false) }
 
     val all = checks.values.all { it }
     println("CORE_REGRESSION=${if (all) "PASS" else "FAIL"}")
