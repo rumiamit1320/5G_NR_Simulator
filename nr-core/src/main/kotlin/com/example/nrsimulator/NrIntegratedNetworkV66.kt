@@ -1,27 +1,8 @@
 package com.example.nrsimulator
 
 import kotlin.math.atan2
-import kotlin.math.max
 import kotlin.math.min
 
-/**
- * V66 additive integration/orchestration layer.
- *
- * Existing V1-V65 modules remain intact. V66 makes the previously separate
- * reference layers participate in one deterministic execution path:
- *
- * V65 topology/traffic -> V27 association/handover -> V28 beam selection
- * -> V16 channel characterization + V15 MIMO characterization -> V62 radio
- * conditions -> V64 closed loop PHY/scheduler/HARQ -> network KPIs.
- *
- * The V16/V15/V28 outputs are fused as an additive link-quality correction,
- * not as a second independent channel/noise application. This avoids double
- * applying fading or AWGN while allowing the richer existing models to affect
- * the V64 transport transaction.
- *
- * This remains a simulator/reference integration layer, not a claim of full
- * 3GPP 38.901/38.214/38.331 conformance.
- */
 data class NrIntegratedNetworkConfigV66(
     val slots: Int = 20,
     val ueCount: Int = 12,
@@ -84,7 +65,25 @@ data class NrIntegratedNetworkResultV66(
     val meanMimoEffectiveSinrDb: Double
 )
 
+/**
+ * V66 composes existing layers without replacing their APIs:
+ * V65 topology/traffic -> V27 mobility -> V28 beams -> V16 channel -> V15 MIMO
+ * -> V62 baseline radio -> V64 closed-loop PHY/scheduler/HARQ -> network KPIs.
+ *
+ * V16/V15/V28 are fused as an additive bounded SINR correction. V62 remains the
+ * authoritative propagation/interference baseline, so fading and AWGN are not
+ * applied twice. This is an integration/reference model, not a 3GPP conformance
+ * claim.
+ */
 object NrIntegratedNetworkV66 {
+    private data class LinkDescriptor(
+        val network: NrNetworkUeV65,
+        val beam: NrBeamV28Result,
+        val channel: NrChannelV16Result,
+        val mimo: NrMimoV15Result,
+        val offsetDb: Double
+    )
+
     private fun jain(values: List<Double>): Double {
         if (values.isEmpty()) return 0.0
         val sum = values.sum()
@@ -95,20 +94,15 @@ object NrIntegratedNetworkV66 {
     private fun angleDeg(x: Double, y: Double, cell: NrNetworkCellV65): Double =
         Math.toDegrees(atan2(y - cell.yM, x - cell.xM))
 
-    /**
-     * Convert the richer reference outputs into one bounded additive SINR
-     * correction. V62 remains the source of baseline propagation/interference;
-     * V16 is used as a frequency-selectivity penalty and V15 as MIMO quality.
-     */
     private fun integrateLinkQuality(
         beamGainDb: Double,
         channelFrequencySelectivityDb: Double,
         mimoEffectiveSinrDb: Double,
-        baselineSinrDb: Double
+        mimoReferenceSinrDb: Double
     ): Double {
         val beamContribution = (beamGainDb - 6.0).coerceIn(-6.0, 8.0)
         val selectivityPenalty = (-0.12 * channelFrequencySelectivityDb).coerceIn(-6.0, 0.0)
-        val mimoContribution = (mimoEffectiveSinrDb - baselineSinrDb).coerceIn(-6.0, 6.0)
+        val mimoContribution = (mimoEffectiveSinrDb - mimoReferenceSinrDb).coerceIn(-6.0, 6.0)
         return (beamContribution + selectivityPenalty + 0.35 * mimoContribution).coerceIn(-12.0, 12.0)
     }
 
@@ -131,26 +125,14 @@ object NrIntegratedNetworkV66 {
             beamCount = config.beamCount.coerceIn(2, 64)
         )
 
-        // V65 owns the network topology, UE trajectories and traffic accounting.
-        // Running it here deliberately preserves its established network API and
-        // gives V66 the same deterministic topology/association reference.
         val network = NrNetworkSimulationV65.run(
             NrNetworkSimulationConfigV65(
-                slots = c.slots,
-                ueCount = c.ueCount,
-                cells = c.cells,
-                prbs = c.prbs,
-                scsKHz = c.scsKHz,
-                carrierGHz = c.carrierGHz,
-                cellRadiusM = c.cellRadiusM,
-                velocityKmh = c.velocityKmh,
-                txPowerDbm = c.txPowerDbm,
+                slots = c.slots, ueCount = c.ueCount, cells = c.cells, prbs = c.prbs,
+                scsKHz = c.scsKHz, carrierGHz = c.carrierGHz, cellRadiusM = c.cellRadiusM,
+                velocityKmh = c.velocityKmh, txPowerDbm = c.txPowerDbm,
                 handoverHysteresisDb = c.handoverHysteresisDb,
-                trafficDemandMbps = c.trafficDemandMbps,
-                txAntennas = c.txAntennas,
-                rxAntennas = c.rxAntennas,
-                layers = c.layers,
-                seed = c.seed
+                trafficDemandMbps = c.trafficDemandMbps, txAntennas = c.txAntennas,
+                rxAntennas = c.rxAntennas, layers = c.layers, seed = c.seed
             )
         )
 
@@ -158,117 +140,79 @@ object NrIntegratedNetworkV66 {
         val beam = NrBeamV28()
         val slotResults = ArrayList<NrIntegratedSlotV66>(c.slots)
         var totalHandover = 0
-        var last = emptyMap<Int, NrIntegratedUeV66>()
-        val allFinal = ArrayList<NrIntegratedUeV66>()
+        var previousServing = IntArray(c.ueCount) { -1 }
+        var finalStates = emptyList<NrIntegratedUeV66>()
         var beamSum = 0.0
         var selectivitySum = 0.0
         var mimoSinrSum = 0.0
-        var qualitySamples = 0
+        var samples = 0
 
         for (slot in 0 until c.slots) {
             val topologyStates = network.slotResults[slot].ueStates
             val v27Cells = network.cells.map { NrCellV27(it.cellId, it.xM, it.yM, it.txPowerDbm) }
-            val mobilityResults = topologyStates.map { state ->
-                mobility.evaluate(state.xM, state.yM, v27Cells, c.handoverHysteresisDb)
+            val mobilityByUe = topologyStates.associate { state ->
+                state.ueId to mobility.evaluate(state.xM, state.yM, v27Cells, c.handoverHysteresisDb)
             }
-
-            // V15/V16 are link/reference models. Their deterministic seeds are
-            // decorrelated by slot and UE while retaining reproducibility.
-            val offsets = HashMap<Int, Double>()
-            val enriched = topologyStates.mapIndexed { index, state ->
+            val descriptors = topologyStates.associate { state ->
                 val cell = network.cells.first { it.cellId == state.servingCellId }
-                val az = angleDeg(state.xM, state.yM, cell)
-                val b = beam.sweep(az, c.txAntennas, c.rxAntennas.coerceAtLeast(1), c.beamCount)
-                val ch = NrChannelV16(
+                val beamResult = beam.sweep(angleDeg(state.xM, state.yM, cell), c.txAntennas, c.rxAntennas, c.beamCount)
+                val channelResult = NrChannelV16(
                     NrChannelV16Config(
-                        model = c.channelModel,
-                        txAntennas = c.txAntennas,
-                        rxAntennas = c.rxAntennas,
-                        scsKHz = c.scsKHz,
-                        prbs = c.prbs,
-                        carrierGHz = c.carrierGHz,
-                        velocityKmh = c.velocityKmh,
-                        spatialCorrelation = c.spatialCorrelation,
-                        timeIndex = slot,
-                        seed = c.seed xor (slot * 1009 + state.ueId * 37)
+                        model = c.channelModel, txAntennas = c.txAntennas, rxAntennas = c.rxAntennas,
+                        scsKHz = c.scsKHz, prbs = c.prbs, carrierGHz = c.carrierGHz,
+                        velocityKmh = c.velocityKmh, spatialCorrelation = c.spatialCorrelation,
+                        timeIndex = slot, seed = c.seed xor (slot * 1009 + state.ueId * 37)
                     )
                 ).summary()
-                val mimo = NrMimoV15().run(
+                // V15's SNR input is a network-level RSRP-derived reference only;
+                // V62/V64 still supplies the actual propagation/interference SINR.
+                val referenceSinr = (state.rsrpDbm + 100.0).coerceIn(-5.0, 40.0)
+                val mimoResult = NrMimoV15().run(
                     NrMimoV15Config(
-                        txAntennas = c.txAntennas,
-                        rxAntennas = c.rxAntennas,
-                        layers = c.layers,
-                        prbs = c.prbs,
-                        snrDb = state.throughputMbps.coerceIn(-5.0, 40.0),
+                        txAntennas = c.txAntennas, rxAntennas = c.rxAntennas,
+                        layers = c.layers, prbs = c.prbs, snrDb = referenceSinr,
                         channelModel = "FREQUENCY_SELECTIVE",
                         seed = c.seed xor (slot * 2017 + state.ueId * 53)
                     )
                 )
-                val baseline = if (network.slotResults[slot].ueStates.isNotEmpty()) {
-                    // V65 does not expose SINR, so use its RSRP as a stable network
-                    // reference and let the V64/V62 engine remain authoritative for
-                    // actual baseline SINR and interference.
-                    (state.rsrpDbm + 100.0).coerceIn(-5.0, 40.0)
-                } else 0.0
-                val offset = integrateLinkQuality(b.gainDb, ch.frequencySelectivityDb, mimo.effectiveSinrDb, baseline)
-                offsets[state.ueId] = offset
-                beamSum += b.gainDb
-                selectivitySum += ch.frequencySelectivityDb
-                mimoSinrSum += mimo.effectiveSinrDb
-                qualitySamples++
-                Triple(state, b, ch)
+                val offset = integrateLinkQuality(
+                    beamResult.gainDb, channelResult.frequencySelectivityDb,
+                    mimoResult.effectiveSinrDb, referenceSinr
+                )
+                beamSum += beamResult.gainDb
+                selectivitySum += channelResult.frequencySelectivityDb
+                mimoSinrSum += mimoResult.effectiveSinrDb
+                samples++
+                state.ueId to LinkDescriptor(state, beamResult, channelResult, mimoResult, offset)
             }
 
+            val offsets = descriptors.mapValues { it.value.offsetDb }
             val closed = NrClosedLoopV64.run(
                 NrClosedLoopConfigV64(
-                    slots = 1,
-                    ueCount = c.ueCount,
-                    cells = c.cells,
-                    prbs = c.prbs,
-                    scsKHz = c.scsKHz,
-                    carrierGHz = c.carrierGHz,
-                    velocityKmh = c.velocityKmh,
-                    txAntennas = c.txAntennas,
-                    rxAntennas = c.rxAntennas,
-                    layers = c.layers,
-                    payloadBitsPerUe = 128,
-                    seed = c.seed + slot * 7919,
+                    slots = 1, ueCount = c.ueCount, cells = c.cells, prbs = c.prbs,
+                    scsKHz = c.scsKHz, carrierGHz = c.carrierGHz, velocityKmh = c.velocityKmh,
+                    txAntennas = c.txAntennas, rxAntennas = c.rxAntennas, layers = c.layers,
+                    payloadBitsPerUe = 128, seed = c.seed + slot * 7919,
                     externalSinrOffsetDbByUe = offsets
                 )
             )
 
-            val states = enriched.map { (state, b, ch) ->
-                val radio = closed.ueStates.first { it.ueId == state.ueId }
-                val v27 = mobilityResults.first { it.source == state.servingCellId }
-                val handover = if (slot == 0) false else state.servingCellId != last[state.ueId]?.servingCellId
+            val states = descriptors.map { (ueId, d) ->
+                val radio = closed.ueStates.first { it.ueId == ueId }
+                val previous = previousServing[ueId - 1]
+                val changed = previous >= 0 && d.network.servingCellId != previous
+                val mobilityTriggered = mobilityByUe[ueId]?.triggered == true
                 NrIntegratedUeV66(
-                    ueId = state.ueId,
-                    servingCellId = state.servingCellId,
-                    xM = state.xM,
-                    yM = state.yM,
-                    rsrpDbm = state.rsrpDbm,
-                    beam = b.beam,
-                    beamGainDb = b.gainDb,
-                    channelFrequencySelectivityDb = ch.frequencySelectivityDb,
-                    mimoEffectiveSinrDb = NrMimoV15().run(
-                        NrMimoV15Config(
-                            txAntennas = c.txAntennas,
-                            rxAntennas = c.rxAntennas,
-                            layers = c.layers,
-                            prbs = c.prbs,
-                            snrDb = state.throughputMbps.coerceIn(-5.0, 40.0),
-                            channelModel = "FREQUENCY_SELECTIVE",
-                            seed = c.seed xor (slot * 2017 + state.ueId * 53)
-                        )
-                    ).effectiveSinrDb,
-                    integratedSinrOffsetDb = offsets.getValue(state.ueId),
-                    sinrDb = radio.sinrDb,
-                    cqi = radio.cqi,
-                    mcs = radio.mcs,
-                    allocatedPrbs = radio.allocatedPrbs,
+                    ueId = ueId, servingCellId = d.network.servingCellId,
+                    xM = d.network.xM, yM = d.network.yM, rsrpDbm = d.network.rsrpDbm,
+                    beam = d.beam.beam, beamGainDb = d.beam.gainDb,
+                    channelFrequencySelectivityDb = d.channel.frequencySelectivityDb,
+                    mimoEffectiveSinrDb = d.mimo.effectiveSinrDb,
+                    integratedSinrOffsetDb = d.offsetDb, sinrDb = radio.sinrDb,
+                    cqi = radio.cqi, mcs = radio.mcs, allocatedPrbs = radio.allocatedPrbs,
                     throughputMbps = min(radio.throughputMbps, c.trafficDemandMbps),
                     crcPass = radio.crcPass,
-                    handover = handover && v27.triggered
+                    handover = changed && mobilityTriggered
                 )
             }
 
@@ -278,23 +222,20 @@ object NrIntegratedNetworkV66 {
             val handovers = states.count { it.handover }
             totalHandover += handovers
             slotResults += NrIntegratedSlotV66(slot, states, states.sumOf { it.throughputMbps }, handovers, load)
-            last = states.associateBy { it.ueId }
-            allFinal.clear(); allFinal.addAll(states)
+            previousServing = IntArray(c.ueCount) { i -> states.first { it.ueId == i + 1 }.servingCellId }
+            finalStates = states
         }
 
-        val delivered = allFinal.sumOf { it.throughputMbps }
-        val demand = allFinal.sumOf { c.trafficDemandMbps }
+        val delivered = finalStates.sumOf { it.throughputMbps }
+        val demand = finalStates.sumOf { c.trafficDemandMbps }
         return NrIntegratedNetworkResultV66(
-            cells = network.cells,
-            ueStates = allFinal.toList(),
-            slotResults = slotResults,
+            cells = network.cells, ueStates = finalStates, slotResults = slotResults,
             totalThroughputMbps = slotResults.map { it.throughputMbps }.average(),
             demandSatisfiedPercent = if (demand <= 0.0) 100.0 else 100.0 * delivered / demand,
-            fairness = jain(allFinal.map { it.throughputMbps }),
-            handovers = totalHandover,
-            meanBeamGainDb = beamSum / qualitySamples.coerceAtLeast(1),
-            meanChannelFrequencySelectivityDb = selectivitySum / qualitySamples.coerceAtLeast(1),
-            meanMimoEffectiveSinrDb = mimoSinrSum / qualitySamples.coerceAtLeast(1)
+            fairness = jain(finalStates.map { it.throughputMbps }), handovers = totalHandover,
+            meanBeamGainDb = beamSum / samples.coerceAtLeast(1),
+            meanChannelFrequencySelectivityDb = selectivitySum / samples.coerceAtLeast(1),
+            meanMimoEffectiveSinrDb = mimoSinrSum / samples.coerceAtLeast(1)
         )
     }
 }
