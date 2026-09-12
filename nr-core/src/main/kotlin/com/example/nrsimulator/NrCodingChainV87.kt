@@ -26,8 +26,9 @@ object NrCodingChainV87 {
         val seg = NrTransportV83.segment(transportBlock, bg)
         val z = seg.liftingSize
         val ils = NrLdpcV82.liftingSet(z)
+        val infoWidth = NrLdpcV82.geometry(bg).informationColumns * z
         val codewords = seg.codeBlocks.map { cb ->
-            val input = IntArray(22 * z) { i -> if (i < cb.payload.size) cb.payload[i] else 0 }
+            val input = IntArray(infoWidth) { i -> if (i < cb.payload.size) cb.payload[i] else 0 }
             NrLdpcCodecV86.encode(input, table, z, ils).bits
         }
         val rm = codewords.map { cw ->
