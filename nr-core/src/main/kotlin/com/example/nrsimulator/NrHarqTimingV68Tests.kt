@@ -22,7 +22,9 @@ object NrHarqTimingV68Tests {
         check("ACK/NACK accounting", r.ackCount + r.nackCount == r.events.size)
         check("pending feedback", r.pendingFeedbackBySlot.values.flatten().size == r.events.size)
         check("NACK retransmission planning", r.events.filter { !it.ack }.all { it.nextTransmissionSlot == it.feedbackSlot + 1 })
+        check("ACK has no retransmission", r.events.filter { it.ack }.all { it.nextTransmissionSlot == null })
         check("no fabricated retransmission", r.events.all { it.transmissionNumber == 1 })
+        check("V51 state integration", r.events.all { it.state in setOf(NrHarqStateV51.ACKED, NrHarqStateV51.RETX, NrHarqStateV51.NACKED) })
 
         return Result(checks.all { it.endsWith("PASS") }, checks)
     }
