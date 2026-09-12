@@ -54,6 +54,9 @@ object NrHarqTimingV68 {
                 val txSlot = slotResult.timing.absoluteSlot.toInt()
                 val feedbackSlot = txSlot + config.downlinkAckDelaySlots
                 val txNumber = 1
+                // Preserve V51 semantics: start the existing process and apply
+                // exactly one observed ACK/NACK. Timing only determines when
+                // that feedback becomes due; it does not mutate the PHY result.
                 val process = NrHarqV51.start(NrHarqProcessV51(processId))
                 val feedbackState = NrHarqV51.feedback(process, ue.crcPass)
                 val nextSlot = if (!ue.crcPass && txNumber < config.maxTransmissions) feedbackSlot + 1 else null
