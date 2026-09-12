@@ -38,6 +38,13 @@ fun main() {
         check("V66", r.slotResults.size == 3 && r.cells.size == 2 && r.ueStates.size == 4 && r.totalThroughputMbps.isFinite())
         check("V66 tests", NrIntegratedNetworkV66Tests.run().pass)
     }.onFailure { check("V66", false); check("V66 tests", false) }
+    runCatching {
+        val r = NrTimingV67.run(
+            NrIntegratedNetworkConfigV66(slots = 3, ueCount = 2, cells = 2, prbs = 12, scsKHz = 30, seed = 6701)
+        )
+        check("V67", r.slotResults.size == 3 && r.timing.numerology == 1 && r.timing.slotsPerFrame == 20)
+        check("V67 tests", NrTimingV67Tests.run().pass)
+    }.onFailure { check("V67", false); check("V67 tests", false) }
 
     val all = checks.values.all { it }
     println("CORE_REGRESSION=${if (all) "PASS" else "FAIL"}")
