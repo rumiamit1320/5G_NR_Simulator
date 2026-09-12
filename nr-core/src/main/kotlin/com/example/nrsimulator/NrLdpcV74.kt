@@ -34,7 +34,7 @@ object NrLdpcV74 {
     }
     /** Normalized min-sum decoder. LLR sign convention: positive means bit 0. */
     fun decode(llr:DoubleArray,h:Array<IntArray>,maxIterations:Int=25,offset:Double=0.15):NrLdpcDecodeV74{
-        require(h.isNotEmpty() && llr.size==h[0].size);val m=h.size;n=llr.size
+        require(h.isNotEmpty() && llr.size==h[0].size);val m=h.size;val n=llr.size
         val checks=Array(m){r->h[r].indices.filter{h[r][it]!=0}.toIntArray()};val vars=Array(n){c->IntArray(m)};for(r in 0 until m)for(c in checks[r])vars[c][r]=1
         val q=Array(m){r->DoubleArray(checks[r].size)};val x=IntArray(n)
         repeat(maxIterations){it->
