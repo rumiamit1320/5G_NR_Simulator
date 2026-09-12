@@ -3,10 +3,9 @@ package com.example.nrsimulator
 /**
  * V71 additive PHY-level HARQ adapter.
  *
- * It reuses the existing V61 link, including its Polar CRC, rate-matching and
- * RV path, and adds explicit soft combining at the HARQ process boundary.
- * V64/V66 remain the network execution spine; this adapter does not replace
- * their PHY implementation.
+ * V71 is retained as a compatibility layer over V61. It records a confidence
+ * metric for diagnostics, but CRC truth always comes from the actual V61
+ * transmission. Real symbol-derived LLR combining is provided by V73.
  */
 data class NrHarqPhyConfigV71(
     val payloadBits: Int = 128,
@@ -44,10 +43,8 @@ object NrHarqPhyIntegrationV71 {
 
     /**
      * Execute one HARQ process using the existing V61 link for every RV.
-     * The same transport block seed is retained while each RV selects the
-     * existing rate-matching path. Soft combining is represented by a signed
-     * confidence metric derived from the returned BER/EVM; no CRC result is
-     * fabricated and V61 remains the source of truth for each transmission.
+     * The confidence metric is diagnostic only; it is never converted into
+     * a fabricated CRC. V73 is the symbol/LLR-based soft-combining path.
      */
     fun run(
         processId: Int = 0,
@@ -80,7 +77,7 @@ object NrHarqPhyIntegrationV71 {
             val confidence = (1.0 - link.ber).coerceIn(0.0, 1.0) *
                 (1.0 / (1.0 + link.evmPercent / 100.0))
             combined += confidence
-            finalCrc = link.crcPass || combined >= 1.65
+            finalCrc = link.crcPass
             tx += NrHarqPhyTransmissionV71(
                 processId = processId,
                 transmissionNumber = number,
@@ -92,7 +89,6 @@ object NrHarqPhyIntegrationV71 {
                 combinedSoftMetric = combined
             )
             if (link.crcPass) break
-            if (number == maxTransmissions) break
         }
 
         return NrHarqPhyResultV71(
