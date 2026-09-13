@@ -235,8 +235,24 @@
     load('/radio-v64-report.js?v=20260912-2');
   }
 
+  function installWebVersionLabel() {
+    const version = 'V85–V91 NR PHY Web Lab';
+    document.title = `5G NR Simulator | ${version}`;
+    const brand = document.querySelector('.brand h1 span');
+    if (brand) brand.textContent = version;
+    const select = document.querySelector('#panel-radio select');
+    if (select && select.options.length) select.options[0].textContent = version;
+    const footer = document.querySelector('.footer span');
+    if (footer) footer.innerHTML = `5G NR Simulator &nbsp;|&nbsp; ${version}`;
+    const perf = document.querySelector('#panel-performance .bigCard small');
+    if (perf) perf.textContent = 'V85–V91 web lab';
+    const pipeline = document.querySelector('#panel-phy .heroLine p');
+    if (pipeline) pipeline.textContent = 'V85–V91 web presentation over the existing NR engine; no nr-core rewrite.';
+  }
+
   function init() {
     installBaseStyles();
+    installWebVersionLabel();
     installMimoPresentation();
     installPhyLayoutAndPresentation();
     loadDependentScripts();
