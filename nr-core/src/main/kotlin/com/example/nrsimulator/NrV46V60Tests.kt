@@ -22,4 +22,5 @@ object NrV46V60Tests{fun run():NrV46V60Result{val o=ArrayList<String>();fun t(id
         safe("V82 LDPC geometry"){val payload=IntArray(4000){it and 1};val bg=NrLdpcV82.selectBaseGraph(payload.size,.5);NrLdpcV82.geometry(bg).rows>0&&NrLdpcV82.allowedLiftingSizes().size==51}
         safe("V83 transport CRC/segmentation"){val payload=IntArray(4000){it and 1};val bg=NrLdpcV82.selectBaseGraph(payload.size,.5);val seg=NrTransportV83.segment(payload,bg);seg.codeBlocks.isNotEmpty()&&seg.kPrime>0&&seg.liftingSize>0}
         safe("V84 rate matching"){val payload=IntArray(4000){it and 1};val bg=NrLdpcV82.selectBaseGraph(payload.size,.5);val seg=NrTransportV83.segment(payload,bg);val encodedBits=NrLdpcV82.encodedSize(bg,seg.liftingSize);val outputBits=(encodedBits-2*seg.liftingSize).coerceAtLeast(1);NrRateMatchingV84.rateMatch(IntArray(encodedBits),NrRateMatchingV84.Config(bg,seg.liftingSize,0,outputBits)).isNotEmpty()}
+        safe("V85-V91 tests"){NrResearchGradeV85V91Tests.run().pass}
         val cert=false;return NrV46V60Result(o,o.none{it.contains("FAIL")||it.contains("ERROR")},cert,o.joinToString("  •  "))}}
