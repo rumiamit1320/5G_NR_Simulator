@@ -17,6 +17,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Prepare exact NR LDPC tables
+        run: |
+          python3 -m pip install --disable-pip-version-check scipy
+          python3 tools/prepare_nr_ldpc_tables.py
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:

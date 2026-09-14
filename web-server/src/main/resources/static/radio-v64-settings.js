@@ -1,10 +1,44 @@
 // V64 additive Settings control.
 // Keeps the existing simulator controls and runtime architecture intact.
+// Web-only presentation identity: V85-V91 NR PHY Web Lab.
 (() => {
   'use strict';
 
+  const WEB_VERSION = 'V85–V91 NR PHY Web Lab';
+
+  const applyWebIdentity = () => {
+    document.title = `5G NR Simulator | ${WEB_VERSION}`;
+
+    const brandVersion = document.querySelector('.brand h1 span');
+    if (brandVersion) brandVersion.textContent = WEB_VERSION;
+
+    const simulatorVersion = Array.from(document.querySelectorAll('select')).find(s =>
+      Array.from(s.options).some(o => /Simulator Version/i.test(o.textContent || ''))
+    );
+    if (simulatorVersion) {
+      const option = simulatorVersion.options[0];
+      if (option) option.textContent = `${WEB_VERSION} (web presentation; existing V64 engine)`;
+    }
+
+    const statusText = document.getElementById('statusText');
+    if (statusText) statusText.textContent = `${WEB_VERSION} · V62 → V63 → V61 execution path`;
+
+    const hero = document.querySelector('#panel-radio .heroLine h2');
+    if (hero) hero.textContent = `Radio Environment · ${WEB_VERSION}`;
+
+    const marker = document.getElementById('webVersionIdentity');
+    if (!marker) {
+      const node = document.createElement('span');
+      node.id = 'webVersionIdentity';
+      node.hidden = true;
+      node.dataset.webVersion = WEB_VERSION;
+      document.body.appendChild(node);
+    }
+  };
+
   const init = () => {
     const button = document.querySelector('.settings');
+    applyWebIdentity();
     if (!button || button.dataset.v64SettingsBound === '1') return;
     button.dataset.v64SettingsBound = '1';
     button.setAttribute('role', 'button');
@@ -19,9 +53,9 @@
         panel.id = 'v64SettingsPopover';
         panel.style.cssText = 'position:fixed;top:68px;right:20px;z-index:1000;width:290px;padding:16px;border:1px solid #164464;border-radius:8px;background:linear-gradient(145deg,#071c30,#061424);color:#dcefff;box-shadow:0 14px 40px #0008;font-size:12px';
         panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><strong style="font-size:14px">Simulator Settings</strong><button id="v64SettingsClose" style="border:1px solid #164464;background:#092036;color:#cfe7fa;border-radius:5px;padding:4px 8px;cursor:pointer">×</button></div>' +
-          '<div style="color:#8fa8bd;line-height:1.55">V64 Radio Environment Lab</div>' +
-          '<div style="margin-top:10px;padding:9px;border:1px solid #123554;border-radius:6px;background:#03111e">Backend: <b>V62 → V63 → V61 → V64</b><br>Mode: <b>Real-Time Closed Loop</b><br>API: <b>/api/lab</b></div>' +
-          '<div style="margin-top:10px;color:#7890aa">These settings are informational. Existing simulation controls remain the source of truth.</div>';
+          '<div style="color:#8fa8bd;line-height:1.55">V85–V91 NR PHY Web Lab</div>' +
+          '<div style="margin-top:10px;padding:9px;border:1px solid #123554;border-radius:6px;background:#03111e">Web version: <b>V85–V91</b><br>Backend: <b>V62 → V63 → V61 → V64</b><br>Mode: <b>Real-Time Closed Loop</b><br>API: <b>/api/lab</b></div>' +
+          '<div style="margin-top:10px;color:#7890aa">Web identity is presentation-only. Existing simulation controls and execution architecture remain the source of truth.</div>';
         document.body.appendChild(panel);
         panel.querySelector('#v64SettingsClose').addEventListener('click', () => panel.remove());
       } else {

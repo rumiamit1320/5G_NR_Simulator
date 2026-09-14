@@ -15,6 +15,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Prepare exact NR LDPC tables
+        run: |
+          python3 -m pip install --disable-pip-version-check scipy
+          python3 tools/prepare_nr_ldpc_tables.py
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -51,6 +55,7 @@ jobs:
           grep -q 'V19-V30 regression' /tmp/suite.json
           grep -q 'V32-V45 tests' /tmp/suite.json
           grep -q 'V46-V60 tests' /tmp/suite.json
+          grep -q 'V85-V91 tests' /tmp/suite.json
           curl -fsS 'http://127.0.0.1:8080/api/lab?version=V19&snr=15&prbs=52&layers=2&mcs=16' >/tmp/v19.json
           grep -q '"version":"V19"' /tmp/v19.json
           grep -q '"parameterized":true' /tmp/v19.json
@@ -67,7 +72,7 @@ jobs:
           grep -q 'V61 End-to-End NR Link' /tmp/link.html
           curl -fsS http://127.0.0.1:8080/radio.html >/tmp/radio.html
           grep -q 'V63' /tmp/radio.html
-          echo 'Web API, V19-V60 lab, V61 link, and V63 radio dashboard smoke tests passed.'
+          echo 'Web API, V19-V60 lab, V61 link, V63 radio dashboard, and V85-V91 regression smoke tests passed.'
       - name: Validate end-to-end simulation scenarios
         run: bash tools/validate_web_scenarios.sh
       - name: Validate educational lab visualizations

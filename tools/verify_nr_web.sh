@@ -16,7 +16,9 @@ printf '\n=== 5G NR WEB / API VERIFICATION ===\n'
 check "Health endpoint" "$BASE_URL/api/health" '"ok":true'
 check "Main lab page" "$BASE_URL/lab.html" '/lab.js'
 check "V61 link page" "$BASE_URL/link.html" 'V61 End-to-End NR Link'
-check "V64 radio page" "$BASE_URL/radio.html" 'V64'
+check "V85-V91 radio page" "$BASE_URL/radio.html" '/radio-v64.js'
+check "V85-V91 web identity" "$BASE_URL/radio-v64-settings.js" 'V85–V91 NR PHY Web Lab'
+check "V85-V91 full suite gate" "$BASE_URL/api/full-suite" 'V85-V91 tests'
 for f in web-server/src/main/resources/static/radio-v64*.js; do
   if node --check "$f" >/dev/null 2>&1; then pass "JavaScript syntax: $f"; else fail "JavaScript syntax: $f"; fi
 done
@@ -37,9 +39,6 @@ for u in x['ueStates']:
 print('V63 structural invariants OK')
 PY
 pass "V63 UE/range/finite-value invariants"
-# Core tests in this repository are intentionally co-located with nr-core sources
-# and executed by CoreRegressionMain. Accept that established layout rather than
-# requiring a duplicate src/test tree.
 if test -f nr-core/src/main/kotlin/com/example/nrsimulator/NrClosedLoopV64.kt && \
    test -f nr-core/src/main/kotlin/com/example/nrsimulator/NrClosedLoopV64Tests.kt && \
    grep -Fq 'NrClosedLoopV64.run' nr-core/src/main/kotlin/com/example/nrsimulator/CoreRegressionMain.kt; then
@@ -53,16 +52,12 @@ done
 for mod in 'QPSK' '16-QAM' '64-QAM' '256-QAM'; do
   if curl -fsS --max-time 60 "$BASE_URL/api/simulate?snr=15&prbs=24&mcs=25&ue=1&tx=2&rx=2&layers=1&mod=$mod&scs=30&harq=true" | grep -Fq '"ok":true'; then pass "V61 modulation $mod"; else fail "V61 modulation $mod"; fi
 done
-# Negative test targets the actual V63 web route. HTTP 400 is a valid handled response.
 code=$(curl -sS --max-time 30 -o /tmp/v63_negative.json -w '%{http_code}' "$BASE_URL/api/lab?version=V63&slots=0&ue=0&cells=0&prbs=0&scs=999&velocity=-100" || true)
 if [[ "$code" =~ ^[2345][0-9][0-9]$ ]]; then pass "Invalid V63 parameter request handled (HTTP $code)"; else fail "Invalid V63 parameter request handling"; fi
 page=$(curl -fsS --max-time 30 "$BASE_URL/radio.html")
 for label in 'Radio Environment' 'PHY Pipeline' 'MIMO / CSI' 'Experiment Lab' 'Network Topology' 'Performance' 'Logs'; do
   if grep -Fq "$label" <<<"$page"; then pass "HMI control/tab: $label"; else fail "HMI control/tab: $label"; fi
 done
-# Download Report and Settings are installed additively by the already-loaded V64
-# compatibility adapter (radio-v64.js), which then loads the dedicated report/settings
-# modules. Verify those modules rather than requiring their generated DOM in raw HTML.
 if grep -Fq 'Download Report' web-server/src/main/resources/static/radio-v64-report.js && \
    grep -Fq 'v64ReportBtn' web-server/src/main/resources/static/radio-v64-report.js; then
   pass "HMI control/tab: Download Report"
@@ -75,8 +70,6 @@ if grep -Fq 'radio-v64-settings.js' web-server/src/main/resources/static/radio-v
 else
   fail "HMI control/tab: Settings"
 fi
-# Startup contract: Live must default OFF and the only automatic run() call is the
-# explicit Live toggle handler. Do not confuse that intentional callback with startup.
 if grep -Fq 'id="liveToggle">▶ &nbsp;Live: OFF' <<<"$page"; then pass "HMI startup: Live OFF"; else fail "HMI startup: Live OFF"; fi
 if grep -Fq 'S={data:null,selected:0,running:false,live:false' web-server/src/main/resources/static/radio-v64-fixed.js && \
    grep -Fq "if(S.live)run();" web-server/src/main/resources/static/radio-v64-fixed.js && \

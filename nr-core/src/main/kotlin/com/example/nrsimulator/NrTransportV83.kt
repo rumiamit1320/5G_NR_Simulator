@@ -59,19 +59,26 @@ object NrTransportV83 {
         val totalFiller = c * k - bPrime
         val blocks = ArrayList<SegmentedCodeBlock>(c)
         var sourceOffset = 0
-        var fillerRemaining = totalFiller
-        val cbPayloadCapacity = kPrime - l
+        var nonFillerOffset = 0
         for (r in 0 until c) {
-            val localFiller = minOf(fillerRemaining, cbPayloadCapacity)
-            fillerRemaining -= localFiller
-            val payloadLen = cbPayloadCapacity - localFiller
+            // K' is the pre-filler block length. Distribute B' across blocks first;
+            // filler occupies the remaining K-K' positions and must not consume TB bits.
+            val nonFillerRemaining = bPrime - nonFillerOffset
+            val blockNonFillerBits = minOf(kPrime, nonFillerRemaining)
+            val cbCrcBits = if (c > 1) 24 else 0
+            val payloadLen = blockNonFillerBits - cbCrcBits
+            require(payloadLen >= 0)
             val payload = tb.copyOfRange(sourceOffset, sourceOffset + payloadLen)
             sourceOffset += payloadLen
             val cbCrc = if (c > 1) appendCrc(payload, CrcType.CRC24B) else null
-            require(payload.size + (cbCrc?.size ?: 0) + localFiller == kPrime)
+            val localFiller = k - blockNonFillerBits
+            nonFillerOffset += blockNonFillerBits
+            require(payload.size + (cbCrc?.size ?: 0) + localFiller == k)
             blocks += SegmentedCodeBlock(r, payload, cbCrc, localFiller, k)
         }
-        require(sourceOffset == b && fillerRemaining == 0)
+        require(sourceOffset == b) { "NR segmentation consumed $sourceOffset of $b transport-block bits" }
+        require(nonFillerOffset == bPrime) { "NR segmentation produced $nonFillerOffset of $bPrime pre-filler bits" }
+        require(blocks.sumOf { it.fillerBits } == totalFiller)
         return Segmentation(baseGraph, a, tbCrc, blocks, totalFiller, z, kPrime)
     }
 }

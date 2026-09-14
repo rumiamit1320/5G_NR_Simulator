@@ -54,7 +54,7 @@ fun main() {
         check("V69 tests", NrHarqExecutionV69Tests.run().pass)
     }.onFailure { check("V69", false); check("V69 tests", false) }
     runCatching {
-        val r = NrHarqExecutionV70.run(NrIntegratedNetworkConfigV66(slots = 8, ueCount = 4, cells = 2, prbs = 24, scsKHz = 30, seed = 7001), NrHarqExecutionConfigV70(extraSlotsForRetransmissions = 16))
+        val r = NrHarqExecutionV70.run(NrIntegratedNetworkConfigV66(slots = 8, ueCount = 4, cells = 2, prbs = 24, velocityKmh = 60.0, seed = 7001), NrHarqExecutionConfigV70(extraSlotsForRetransmissions = 16))
         check("V70", r.events.isNotEmpty() && r.ackCount + r.nackCount == r.events.size)
         check("V70 tests", NrHarqExecutionV70Tests.run().pass)
     }.onFailure { check("V70", false); check("V70 tests", false) }
@@ -63,6 +63,7 @@ fun main() {
     runCatching { check("V73 tests", NrHarqSoftPhyV73Tests.run().pass) }.onFailure { check("V73 tests", false) }
     runCatching { check("V74-V81 tests", NrResearchGradeV74V81Tests.run().pass) }.onFailure { check("V74-V81 tests", false) }
     runCatching { check("V82-V84 tests", NrResearchGradeV82V84Tests.run().pass) }.onFailure { check("V82-V84 tests", false) }
+    runCatching { check("V85-V91 tests", NrResearchGradeV85V91Tests.run().pass) }.onFailure { check("V85-V91 tests", false) }
 
     val all = checks.values.all { it }
     println("CORE_REGRESSION=${if (all) "PASS" else "FAIL"}")

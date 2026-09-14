@@ -33,6 +33,11 @@ object LabApi {
 
     fun handle(exchange: HttpExchange) {
         val version = q(exchange, "version", "V19").uppercase()
+        // Additive V85-V91 dispatch: preserve the existing V19-V63 LabApi path unchanged.
+        if (version in setOf("V85", "V86", "V87", "V88", "V89", "V90", "V91")) {
+            NrV85V91WebAdapter.handle(exchange)
+            return
+        }
         val snr = q(exchange, "snr", "15").toDoubleOrNull()?.coerceIn(-20.0, 50.0) ?: 15.0
         val prbs = q(exchange, "prbs", "52").toIntOrNull()?.coerceIn(1, 275) ?: 52
         val layers = q(exchange, "layers", "2").toIntOrNull()?.coerceIn(1, 4) ?: 2
