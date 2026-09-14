@@ -16,7 +16,8 @@ printf '\n=== 5G NR WEB / API VERIFICATION ===\n'
 check "Health endpoint" "$BASE_URL/api/health" '"ok":true'
 check "Main lab page" "$BASE_URL/lab.html" '/lab.js'
 check "V61 link page" "$BASE_URL/link.html" 'V61 End-to-End NR Link'
-check "V85-V91 radio page" "$BASE_URL/radio.html" 'V85–V91 NR PHY Web Lab'
+check "V85-V91 radio page" "$BASE_URL/radio.html" '/radio-v64.js'
+check "V85-V91 web identity" "$BASE_URL/radio-v64-settings.js" 'V85–V91 NR PHY Web Lab'
 check "V85-V91 full suite gate" "$BASE_URL/api/full-suite" 'V85-V91 tests'
 for f in web-server/src/main/resources/static/radio-v64*.js; do
   if node --check "$f" >/dev/null 2>&1; then pass "JavaScript syntax: $f"; else fail "JavaScript syntax: $f"; fi
