@@ -1,6 +1,5 @@
 package com.example.nrsimulator
 
-import kotlin.math.log10
 import kotlin.math.sqrt
 
 /**
@@ -41,7 +40,11 @@ object NrEndToEndV100 {
         require(config.targetCodeRate in 0.01..0.99)
 
         val payload = IntArray(config.payloadBits) { (it * 17 + 3) and 1 }
-        val table = NrLdpcV85.exactTable(NrLdpcV85.BaseGraph.BG1)
+        val selectedBg = NrLdpcV82.selectBaseGraph(config.payloadBits, config.targetCodeRate)
+        val table = when (selectedBg) {
+            NrLdpcV82.BaseGraph.BG1 -> NrLdpcV85.exactTable(NrLdpcV85.BaseGraph.BG1)
+            NrLdpcV82.BaseGraph.BG2 -> NrLdpcV85.exactTable(NrLdpcV85.BaseGraph.BG2)
+        }
         val encoded = NrCodingChainV87.encode(
             payload,
             config.targetCodeRate,
@@ -50,18 +53,13 @@ object NrEndToEndV100 {
             rv = config.rv
         )
 
-        // V87 emits one rate-matched vector per code block. For this integration
-        // path use the first block as the deterministic waveform payload; the
-        // complete multi-block transport path remains available through V87.
         require(encoded.rateMatched.isNotEmpty())
         val txBits = encoded.rateMatched.first()
         val usable = txBits.size - (txBits.size % config.modulation.bitsPerSymbol)
+        require(usable > 0)
         val modulated = NrPhyMappingV89.modulate(txBits.copyOf(usable), config.modulation)
         val layerMapped = NrPhyMappingV89.mapLayers(modulated, config.layers)
 
-        // Build a compact per-layer frequency grid and reserve the first bins
-        // for the data path. DMRS is generated separately and does not overwrite
-        // data, preserving the deterministic integration signal.
         val dmrs = NrDmrsV92.generate(NrDmrsV92.Config(
             subcarriers = maxOf(12, config.layers * 4),
             symbols = 1,
@@ -102,16 +100,13 @@ object NrEndToEndV100 {
         val received = receivedGrid[0]
         val evm = NrOfdmV93.evm(reference, received)
 
-        // Hard QAM decisions recover the deterministic transmitted bits at the
-        // high-SNR regression point. Layer de-mapping follows V89 round-robin mapping.
         val recoveredSymbols = ArrayList<NrPhyMappingV89.Complex>()
         for (i in modulated.indices) {
             val layer = i % config.layers
             val pos = i / config.layers
             if (pos < receivedGrid[layer].size) recoveredSymbols += receivedGrid[layer][pos]
         }
-        val recoveredBits = demodulateHard(recoveredSymbols.toTypedArray(), config.modulation)
-            .copyOf(usable)
+        val recoveredBits = demodulateHard(recoveredSymbols.toTypedArray(), config.modulation).copyOf(usable)
         val llr = DoubleArray(recoveredBits.size) { if (recoveredBits[it] == 0) 12.0 else -12.0 }
         val recoveredCodewordLlr = NrRateMatchingV84.rateRecover(
             llr,
@@ -125,12 +120,9 @@ object NrEndToEndV100 {
             maxIterations = 50
         )
         val sourceBlock = encoded.codeBlocks.first()
-        val infoWidth = sourceBlock.payload.size
-        val decodedPayload = decoded.bits.copyOf(infoWidth)
+        val decodedPayload = decoded.bits.copyOf(sourceBlock.payload.size)
         val payloadRecovered = decodedPayload.contentEquals(sourceBlock.payload)
-        val crcPassed = payloadRecovered &&
-            encoded.transportWithCrc.size == config.payloadBits + 16
-
+        val crcPassed = payloadRecovered && encoded.transportWithCrc.size == config.payloadBits + 16
         val ldpcPassed = decoded.converged && decoded.syndromeWeight == 0 && payloadRecovered
         val passed = ldpcPassed && crcPassed && evm.isFinite() && receivedGrid.size == config.layers
 
@@ -159,10 +151,7 @@ object NrEndToEndV100 {
         return p
     }
 
-    private fun demodulateHard(
-        symbols: Array<NrPhyMappingV89.Complex>,
-        modulation: NrPhyMappingV89.Modulation
-    ): IntArray {
+    private fun demodulateHard(symbols: Array<NrPhyMappingV89.Complex>, modulation: NrPhyMappingV89.Modulation): IntArray {
         val out = IntArray(symbols.size * modulation.bitsPerSymbol)
         var at = 0
         symbols.forEach { s ->
@@ -175,8 +164,6 @@ object NrEndToEndV100 {
                 NrPhyMappingV89.Modulation.QAM16,
                 NrPhyMappingV89.Modulation.QAM64,
                 NrPhyMappingV89.Modulation.QAM256 -> {
-                    // The existing V89 mapper uses binary axis levels. Quantize
-                    // each axis back to the nearest level, then emit MSB-first.
                     val levels = when (modulation) {
                         NrPhyMappingV89.Modulation.QAM16 -> 4
                         NrPhyMappingV89.Modulation.QAM64 -> 8
@@ -187,9 +174,7 @@ object NrEndToEndV100 {
                         val norm = sqrt((2.0 / 3.0) * (levels * levels - 1))
                         return (((v * norm + levels - 1.0) / 2.0).toInt()).coerceIn(0, levels - 1)
                     }
-                    fun emit(v: Int) {
-                        for (b in bitsAxis - 1 downTo 0) out[at++] = (v ushr b) and 1
-                    }
+                    fun emit(v: Int) { for (b in bitsAxis - 1 downTo 0) out[at++] = (v ushr b) and 1 }
                     emit(axis(s.re)); emit(axis(s.im))
                 }
             }
