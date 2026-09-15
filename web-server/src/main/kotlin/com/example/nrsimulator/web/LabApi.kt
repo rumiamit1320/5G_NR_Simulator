@@ -43,6 +43,11 @@ object LabApi {
             LabApiV92V100.handle(exchange)
             return
         }
+        // Additive V101 exact DM-RS dispatch; all V1-V100 routes remain unchanged.
+        if (version == "V101") {
+            NrV101WebAdapter.handle(exchange)
+            return
+        }
         val snr = q(exchange, "snr", "15").toDoubleOrNull()?.coerceIn(-20.0, 50.0) ?: 15.0
         val prbs = q(exchange, "prbs", "52").toIntOrNull()?.coerceIn(1, 275) ?: 52
         val layers = q(exchange, "layers", "2").toIntOrNull()?.coerceIn(1, 4) ?: 2
