@@ -5,7 +5,7 @@ import kotlin.math.sqrt
 /**
  * Additive V100 end-to-end NR PHY execution path.
  * Existing V1-V99 implementations are reused; no legacy implementation is replaced.
- * This is an integration/regression path, not a claim of full 3GPP conformance.
+ * The recovery side now uses waveform-derived soft LLRs and an actual TB CRC check.
  */
 object NrEndToEndV100 {
     data class Config(
@@ -106,8 +106,9 @@ object NrEndToEndV100 {
             val pos = i / config.layers
             if (pos < receivedGrid[layer].size) recoveredSymbols += receivedGrid[layer][pos]
         }
-        val recoveredBits = demodulateHard(recoveredSymbols.toTypedArray(), config.modulation).copyOf(usable)
-        val llr = DoubleArray(recoveredBits.size) { if (recoveredBits[it] == 0) 12.0 else -12.0 }
+        val noiseVariance = channel.noiseVariance.coerceAtLeast(1e-12)
+        val llr = softDemodulate(recoveredSymbols.toTypedArray(), config.modulation, noiseVariance)
+            .copyOf(usable)
         val recoveredCodewordLlr = NrRateMatchingV84.rateRecover(
             llr,
             NrRateMatchingV84.Config(encoded.baseGraph, encoded.liftingSize, config.rv, usable)
@@ -120,16 +121,17 @@ object NrEndToEndV100 {
             maxIterations = 50
         )
         val sourceBlock = encoded.codeBlocks.first()
-        val decodedPayload = decoded.bits.copyOf(sourceBlock.payload.size)
-        val payloadRecovered = decodedPayload.contentEquals(sourceBlock.payload)
-        val crcPassed = payloadRecovered && encoded.transportWithCrc.size == config.payloadBits + 16
+        val decodedTransport = decoded.bits.copyOf(sourceBlock.payload.size)
+        val payloadRecovered = decodedTransport.contentEquals(encoded.transportWithCrc)
+        val crcType = NrTransportV83.crcTypeForTransportBlock(config.payloadBits)
+        val crcPassed = payloadRecovered && NrTransportV83.checkCrc(decodedTransport, crcType)
         val ldpcPassed = decoded.converged && decoded.syndromeWeight == 0 && payloadRecovered
         val passed = ldpcPassed && crcPassed && evm.isFinite() && receivedGrid.size == config.layers
 
         return Report(
             passed = passed,
             payloadBits = config.payloadBits,
-            recoveredBits = decodedPayload.size,
+            recoveredBits = decodedTransport.size,
             baseGraph = encoded.baseGraph.name,
             liftingSize = encoded.liftingSize,
             codeBlocks = encoded.codeBlocks.size,
@@ -141,7 +143,7 @@ object NrEndToEndV100 {
             snrDb = channel.snrDb,
             crcPassed = crcPassed,
             ldpcPassed = ldpcPassed,
-            notes = "Additive V100 integration path; V1-V99 APIs remain unchanged."
+            notes = "Additive V100 integration path with waveform-derived soft LLR and real TB CRC verification; V1-V99 APIs remain unchanged."
         )
     }
 
@@ -151,32 +153,35 @@ object NrEndToEndV100 {
         return p
     }
 
-    private fun demodulateHard(symbols: Array<NrPhyMappingV89.Complex>, modulation: NrPhyMappingV89.Modulation): IntArray {
-        val out = IntArray(symbols.size * modulation.bitsPerSymbol)
+    /**
+     * Max-log soft demodulator. The constellation is generated through the
+     * existing V89 mapper, so the bit labeling stays identical to transmission.
+     * Positive LLR favors bit 0; negative LLR favors bit 1.
+     */
+    private fun softDemodulate(
+        symbols: Array<NrPhyMappingV89.Complex>,
+        modulation: NrPhyMappingV89.Modulation,
+        noiseVariance: Double
+    ): DoubleArray {
+        val m = modulation.bitsPerSymbol
+        val constellation = Array(1 shl m) { value ->
+            val bits = IntArray(m) { b -> (value ushr (m - 1 - b)) and 1 }
+            NrPhyMappingV89.modulate(bits, modulation)[0]
+        }
+        val out = DoubleArray(symbols.size * m)
         var at = 0
-        symbols.forEach { s ->
-            when (modulation) {
-                NrPhyMappingV89.Modulation.BPSK -> out[at++] = if (s.re >= 0.0) 0 else 1
-                NrPhyMappingV89.Modulation.QPSK -> {
-                    out[at++] = if (s.re >= 0.0) 0 else 1
-                    out[at++] = if (s.im >= 0.0) 0 else 1
+        symbols.forEach { r ->
+            for (bit in 0 until m) {
+                var min0 = Double.POSITIVE_INFINITY
+                var min1 = Double.POSITIVE_INFINITY
+                constellation.indices.forEach { index ->
+                    val c = constellation[index]
+                    val dr = r.re - c.re
+                    val di = r.im - c.im
+                    val d = dr * dr + di * di
+                    if (((index ushr (m - 1 - bit)) and 1) == 0) min0 = minOf(min0, d) else min1 = minOf(min1, d)
                 }
-                NrPhyMappingV89.Modulation.QAM16,
-                NrPhyMappingV89.Modulation.QAM64,
-                NrPhyMappingV89.Modulation.QAM256 -> {
-                    val levels = when (modulation) {
-                        NrPhyMappingV89.Modulation.QAM16 -> 4
-                        NrPhyMappingV89.Modulation.QAM64 -> 8
-                        else -> 16
-                    }
-                    val bitsAxis = Integer.numberOfTrailingZeros(levels)
-                    fun axis(v: Double): Int {
-                        val norm = sqrt((2.0 / 3.0) * (levels * levels - 1))
-                        return (((v * norm + levels - 1.0) / 2.0).toInt()).coerceIn(0, levels - 1)
-                    }
-                    fun emit(v: Int) { for (b in bitsAxis - 1 downTo 0) out[at++] = (v ushr b) and 1 }
-                    emit(axis(s.re)); emit(axis(s.im))
-                }
+                out[at++] = ((min1 - min0) / noiseVariance).coerceIn(-60.0, 60.0)
             }
         }
         return out
