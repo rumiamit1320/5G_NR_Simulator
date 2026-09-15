@@ -1,0 +1,23 @@
+name: Export full project ZIP
+
+on:
+  push:
+    branches:
+      - nr-v92-v100-additive
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create project ZIP
+        run: |
+          git archive --format=zip --output=5G_NR_Simulator_V92_V100.zip HEAD
+      - name: Upload project ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: 5G_NR_Simulator_V92_V100
+          path: 5G_NR_Simulator_V92_V100.zip
+          if-no-files-found: error

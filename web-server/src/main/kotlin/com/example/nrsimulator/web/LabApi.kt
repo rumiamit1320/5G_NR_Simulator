@@ -38,6 +38,11 @@ object LabApi {
             NrV85V91WebAdapter.handle(exchange)
             return
         }
+        // Additive V92-V100 dispatch: preserve all earlier LabApi cases unchanged.
+        if (version in setOf("V92", "V93", "V94", "V95", "V96", "V97", "V98", "V99", "V100")) {
+            LabApiV92V100.handle(exchange)
+            return
+        }
         val snr = q(exchange, "snr", "15").toDoubleOrNull()?.coerceIn(-20.0, 50.0) ?: 15.0
         val prbs = q(exchange, "prbs", "52").toIntOrNull()?.coerceIn(1, 275) ?: 52
         val layers = q(exchange, "layers", "2").toIntOrNull()?.coerceIn(1, 4) ?: 2
@@ -103,7 +108,7 @@ object LabApi {
                 "V48" -> { val p=NrPdcchV48.encode(bits(q(exchange,"bits","16").toIntOrNull()?.coerceIn(1,10000)?:16),q(exchange,"rnti","4660").toIntOrNull()?:0x1234,q(exchange,"aggregation","4").toIntOrNull()?.coerceIn(1,16)?:4); ok("QPSK=${count(p.qpsk)}", false) }
                 "V49" -> {
                     val gridPrbs=q(exchange,"rbCount","24").toIntOrNull()?.coerceIn(1,275)?:24
-                    val start=q(exchange,"startRb","0").toIntOrNull()?.coerceIn(0,gridPrbs-1)?:0
+                    val start=q(exchange,"startRb","0").toIntOrNull()?.coerceIn(0,274)?:0
                     val span=q(exchange,"rbReserve","4").toIntOrNull()?.coerceIn(1,gridPrbs-start)?:minOf(4,gridPrbs-start)
                     val symbols=q(exchange,"symbolCount","2").toIntOrNull()?.coerceIn(1,14)?:2
                     val layer=q(exchange,"layer","0").toIntOrNull()?.coerceIn(0,layers-1)?:0
@@ -157,7 +162,7 @@ object LabApi {
                 }
                 "V55" -> {
                     val tid=q(exchange,"transactionId","1").toIntOrNull()?.coerceIn(0,3)?:1
-                    val payload=bytes(q(exchange,"payloadBytes","1").toIntOrNull()?.coerceIn(0,65531)?:1)
+                    val payload=bytes(q(exchange,"payloadBytes","1").toIntOrNull()?.coerceIn(1,65531)?:1)
                     val type=q(exchange,"type","SETUP").uppercase().let { runCatching { NrRrcMessageTypeV55.valueOf(it) }.getOrDefault(NrRrcMessageTypeV55.SETUP) }
                     val decoded=NrRrcV55.decode(NrRrcV55.encode(NrRrcPduV55(type,tid,payload)))
                     ok("type=${decoded.type}, transactionId=${decoded.transactionId}, payload=${count(decoded.criticalExtensions)}, roundTrip=${decoded.criticalExtensions.contentEquals(payload)}")
