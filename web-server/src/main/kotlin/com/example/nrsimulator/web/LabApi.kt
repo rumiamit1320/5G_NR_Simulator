@@ -48,6 +48,11 @@ object LabApi {
             NrV101WebAdapter.handle(exchange)
             return
         }
+        // Additive V102-V110 dispatch; all V1-V101 routes remain unchanged.
+        if (version in setOf("V102", "V103", "V104", "V105", "V106", "V107", "V108", "V109", "V110")) {
+            NrV102V110WebAdapter.handle(exchange)
+            return
+        }
         val snr = q(exchange, "snr", "15").toDoubleOrNull()?.coerceIn(-20.0, 50.0) ?: 15.0
         val prbs = q(exchange, "prbs", "52").toIntOrNull()?.coerceIn(1, 275) ?: 52
         val layers = q(exchange, "layers", "2").toIntOrNull()?.coerceIn(1, 4) ?: 2

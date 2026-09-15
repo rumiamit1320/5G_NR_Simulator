@@ -32,6 +32,7 @@ object NrCanonicalPhy {
         "PDSCH/PUSCH resource mapping -> NrPdschPuschV91",
         "DMRS resource/sequence primitives -> NrDmrsV92",
         "exact PDSCH/PUSCH DMRS sequence+mapping -> NrDmrsV101",
+        "RE reservation/OFDM/MIMO/channel/soft LLR -> NrV102V110Additive",
         "OFDM -> NrOfdmV93",
         "MIMO -> NrMimoV94",
         "channel -> NrChannelV95",
