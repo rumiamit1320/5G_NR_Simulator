@@ -161,10 +161,14 @@ object NrDmrsV101 {
                 val info = portInfo(port, config.configurationType)
                 var m = 0
                 val lPrime = if (config.maxLength == MaxLength.LEN2 && l != timePositions.first()) 1 else 0
-                for (n in 0 until config.resourceBlocks) {
-                    val maxKp = if (config.configurationType == ConfigurationType.TYPE1) 2 else 2
-                    for (kp in 0 until maxKp) {
-                        val k = if (config.configurationType == ConfigurationType.TYPE1) config.startSubcarrier + 12 * n + 4 * (m / 2) + 2 * kp + info.delta else config.startSubcarrier + 12 * n + 6 * (m / 2) + kp + info.delta
+                val nGroups = if (config.configurationType == ConfigurationType.TYPE1) config.resourceBlocks else 2 * config.resourceBlocks
+                for (n in 0 until nGroups) {
+                    for (kp in 0..1) {
+                        val k = if (config.configurationType == ConfigurationType.TYPE1) {
+                            config.startSubcarrier + 12 * n + 2 * kp + info.delta
+                        } else {
+                            config.startSubcarrier + 6 * n + kp + info.delta
+                        }
                         if (k >= config.startSubcarrier + 12 * config.resourceBlocks) continue
                         val value = seq[m.coerceAtMost(seq.lastIndex)]
                         val wf = info.wf[kp]
