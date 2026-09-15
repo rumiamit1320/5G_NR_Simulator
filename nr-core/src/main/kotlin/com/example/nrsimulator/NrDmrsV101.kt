@@ -1,17 +1,8 @@
 package com.example.nrsimulator
 
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 import kotlin.math.sqrt
 
-/**
- * V101 additive exact-NR DM-RS primitives.
- *
- * Targets TS 38.211 sequence generation and the normal-CP PDSCH/PUSCH
- * time/frequency resource mapping rules. V92 remains available as the
- * structural compatibility implementation.
- */
+/** V101 additive NR DM-RS sequence and normal-CP resource mapping primitives. */
 object NrDmrsV101 {
     enum class MappingType { A, B }
     enum class ConfigurationType { TYPE1, TYPE2 }
@@ -56,7 +47,7 @@ object NrDmrsV101 {
 
     private data class PortInfo(val lambda: Int, val delta: Int, val wf: IntArray, val wt: IntArray)
 
-    /** TS 38.211 5.2.1 Gold sequence, returning c(0..length-1). */
+    /** TS 38.211 5.2.1 Gold sequence c(n). */
     fun gold(cInit: Long, length: Int): IntArray {
         require(length >= 0)
         if (length == 0) return IntArray(0)
@@ -73,7 +64,6 @@ object NrDmrsV101 {
         return IntArray(length) { n -> (x1[n + nc] + x2[n + nc]) and 1 }
     }
 
-    /** TS 38.211 DM-RS c_init for a given slot/symbol. */
     fun cInit(slot: Int, symbol: Int, nId: Int, nSCID: Int, symbolsPerSlot: Int = 14): Long {
         require(slot >= 0 && symbol >= 0 && nId in 0..65535 && nSCID in 0..1)
         require(symbolsPerSlot in 12..14)
@@ -81,58 +71,95 @@ object NrDmrsV101 {
         return ((1L shl 17) * a * (2L * nId + 1L) + 2L * nId + nSCID) and 0x7fffffffL
     }
 
-    /** r(m)=1/sqrt(2)((1-2c(2m))+j(1-2c(2m+1))). */
     fun sequence(slot: Int, symbol: Int, nId: Int, nSCID: Int, length: Int, symbolsPerSlot: Int = 14): Array<NrDmrsMimoV90.Complex> {
-        require(length >= 0)
         val c = gold(cInit(slot, symbol, nId, nSCID, symbolsPerSlot), 2 * length)
-        val s = 1.0 / sqrt(2.0)
-        return Array(length) { m -> NrDmrsMimoV90.Complex((1 - 2 * c[2 * m]) * s, (1 - 2 * c[2 * m + 1]) * s) }
+        val scale = 1.0 / sqrt(2.0)
+        return Array(length) { m -> NrDmrsMimoV90.Complex((1 - 2 * c[2 * m]) * scale, (1 - 2 * c[2 * m + 1]) * scale) }
     }
 
     private fun portInfo(port: Int, type: ConfigurationType): PortInfo {
-        val base = if (type == ConfigurationType.TYPE1) {
+        return if (type == ConfigurationType.TYPE1) {
             when (port) {
-                in 1000..1001 -> PortInfo(0, 0, intArrayOf(1, if (port == 1000) 1 else -1), intArrayOf(1, 1))
-                in 1002..1003 -> PortInfo(1, 1, intArrayOf(1, if (port == 1002) 1 else -1), intArrayOf(1, 1))
-                in 1004..1005 -> PortInfo(0, 0, intArrayOf(1, if (port == 1004) 1 else -1), intArrayOf(1, -1))
-                in 1006..1007 -> PortInfo(1, 1, intArrayOf(1, if (port == 1006) 1 else -1), intArrayOf(1, -1))
+                1000 -> PortInfo(0, 0, intArrayOf(1, 1), intArrayOf(1, 1))
+                1001 -> PortInfo(0, 0, intArrayOf(1, -1), intArrayOf(1, 1))
+                1002 -> PortInfo(1, 1, intArrayOf(1, 1), intArrayOf(1, 1))
+                1003 -> PortInfo(1, 1, intArrayOf(1, -1), intArrayOf(1, 1))
+                1004 -> PortInfo(0, 0, intArrayOf(1, 1), intArrayOf(1, -1))
+                1005 -> PortInfo(0, 0, intArrayOf(1, -1), intArrayOf(1, -1))
+                1006 -> PortInfo(1, 1, intArrayOf(1, 1), intArrayOf(1, -1))
+                1007 -> PortInfo(1, 1, intArrayOf(1, -1), intArrayOf(1, -1))
                 else -> error("unsupported TYPE1 DM-RS port: $port")
             }
         } else {
             when (port) {
-                in 1000..1001 -> PortInfo(0, 0, intArrayOf(1, if (port == 1000) 1 else -1), intArrayOf(1, 1))
-                in 1002..1003 -> PortInfo(1, 2, intArrayOf(1, if (port == 1002) 1 else -1), intArrayOf(1, 1))
-                in 1004..1005 -> PortInfo(2, 4, intArrayOf(1, if (port == 1004) 1 else -1), intArrayOf(1, 1))
-                in 1006..1007 -> PortInfo(0, 0, intArrayOf(1, if (port == 1006) 1 else -1), intArrayOf(1, -1))
-                in 1008..1009 -> PortInfo(1, 2, intArrayOf(1, if (port == 1008) 1 else -1), intArrayOf(1, -1))
-                in 1010..1011 -> PortInfo(2, 4, intArrayOf(1, if (port == 1010) 1 else -1), intArrayOf(1, -1))
+                1000 -> PortInfo(0, 0, intArrayOf(1, 1), intArrayOf(1, 1))
+                1001 -> PortInfo(0, 0, intArrayOf(1, -1), intArrayOf(1, 1))
+                1002 -> PortInfo(1, 2, intArrayOf(1, 1), intArrayOf(1, 1))
+                1003 -> PortInfo(1, 2, intArrayOf(1, -1), intArrayOf(1, 1))
+                1004 -> PortInfo(2, 4, intArrayOf(1, 1), intArrayOf(1, 1))
+                1005 -> PortInfo(2, 4, intArrayOf(1, -1), intArrayOf(1, 1))
+                1006 -> PortInfo(0, 0, intArrayOf(1, 1), intArrayOf(1, -1))
+                1007 -> PortInfo(0, 0, intArrayOf(1, -1), intArrayOf(1, -1))
+                1008 -> PortInfo(1, 2, intArrayOf(1, 1), intArrayOf(1, -1))
+                1009 -> PortInfo(1, 2, intArrayOf(1, -1), intArrayOf(1, -1))
+                1010 -> PortInfo(2, 4, intArrayOf(1, 1), intArrayOf(1, -1))
+                1011 -> PortInfo(2, 4, intArrayOf(1, -1), intArrayOf(1, -1))
                 else -> error("unsupported TYPE2 DM-RS port: $port")
             }
         }
-        return base
     }
 
-    private fun singlePositions(mapping: MappingType, ld: Int, l0: Int, add: AdditionalPosition): IntArray {
-        val a = when (mapping) {
+    private fun dmrsSymbols(mapping: MappingType, ld: Int, l0: Int, add: AdditionalPosition): IntArray {
+        val result: IntArray = when (mapping) {
             MappingType.A -> when (ld) {
                 in 3..7 -> intArrayOf(l0)
-                8, 9 -> when (add) { AdditionalPosition.POS0 -> intArrayOf(l0); else -> intArrayOf(l0, 7) }
-                10, 11 -> when (add) { AdditionalPosition.POS0 -> intArrayOf(l0); AdditionalPosition.POS1 -> intArrayOf(l0, 9); else -> intArrayOf(l0, 6, 9) }
-                12 -> when (add) { AdditionalPosition.POS0 -> intArrayOf(l0); AdditionalPosition.POS1 -> intArrayOf(l0, 9); AdditionalPosition.POS2 -> intArrayOf(l0, 6, 9); AdditionalPosition.POS3 -> intArrayOf(l0, 5, 8, 11) }
-                else -> when (add) { AdditionalPosition.POS0 -> intArrayOf(l0); AdditionalPosition.POS1 -> intArrayOf(l0, 11); AdditionalPosition.POS2 -> intArrayOf(l0, 7, 11); AdditionalPosition.POS3 -> intArrayOf(l0, 5, 8, 11) }
+                8, 9 -> if (add == AdditionalPosition.POS0) intArrayOf(l0) else intArrayOf(l0, 7)
+                10, 11 -> when (add) {
+                    AdditionalPosition.POS0 -> intArrayOf(l0)
+                    AdditionalPosition.POS1 -> intArrayOf(l0, 9)
+                    else -> intArrayOf(l0, 6, 9)
+                }
+                12 -> when (add) {
+                    AdditionalPosition.POS0 -> intArrayOf(l0)
+                    AdditionalPosition.POS1 -> intArrayOf(l0, 9)
+                    AdditionalPosition.POS2 -> intArrayOf(l0, 6, 9)
+                    AdditionalPosition.POS3 -> intArrayOf(l0, 5, 8, 11)
+                }
+                else -> when (add) {
+                    AdditionalPosition.POS0 -> intArrayOf(l0)
+                    AdditionalPosition.POS1 -> intArrayOf(l0, 11)
+                    AdditionalPosition.POS2 -> intArrayOf(l0, 7, 11)
+                    AdditionalPosition.POS3 -> intArrayOf(l0, 5, 8, 11)
+                }
             }
             MappingType.B -> when (ld) {
                 2, 3, 4 -> intArrayOf(l0)
-                5, 6, 7 -> when (add) { AdditionalPosition.POS0 -> intArrayOf(l0); else -> intArrayOf(l0, 4) }
-                8 -> when (add) { AdditionalPosition.POS0 -> intArrayOf(l0); AdditionalPosition.POS1 -> intArrayOf(l0, 6); else -> intArrayOf(l0, 3, 6) }
-                9 -> when (add) { AdditionalPosition.POS0 -> intArrayOf(l0); AdditionalPosition.POS1 -> intArrayOf(l0, 7); else -> intArrayOf(l0, 4, 7) }
-                10 -> when (add) { AdditionalPosition.POS0 -> intArrayOf(l0); AdditionalPosition.POS1 -> intArrayOf(l0, 7); else -> intArrayOf(l0, 4, 7) }
-                11 -> when (add) { AdditionalPosition.POS0 -> intArrayOf(l0); AdditionalPosition.POS1 -> intArrayOf(l0, 8); AdditionalPosition.POS2 -> intArrayOf(l0, 4, 8); else -> intArrayOf(l0, 3, 6, 9) }
-                12, 13, 14 -> when (add) { AdditionalPosition.POS0 -> intArrayOf(l0); AdditionalPosition.POS1 -> intArrayOf(l0, 9); AdditionalPosition.POS2 -> intArrayOf(l0, 5, 9); else -> intArrayOf(l0, 3, 6, 9) }
-                else -> intArrayOf(l0)
+                5, 6, 7 -> if (add == AdditionalPosition.POS0) intArrayOf(l0) else intArrayOf(l0, 4)
+                8 -> when (add) {
+                    AdditionalPosition.POS0 -> intArrayOf(l0)
+                    AdditionalPosition.POS1 -> intArrayOf(l0, 6)
+                    else -> intArrayOf(l0, 3, 6)
+                }
+                9, 10 -> when (add) {
+                    AdditionalPosition.POS0 -> intArrayOf(l0)
+                    AdditionalPosition.POS1 -> intArrayOf(l0, 7)
+                    else -> intArrayOf(l0, 4, 7)
+                }
+                11 -> when (add) {
+                    AdditionalPosition.POS0 -> intArrayOf(l0)
+                    AdditionalPosition.POS1 -> intArrayOf(l0, 8)
+                    AdditionalPosition.POS2 -> intArrayOf(l0, 4, 8)
+                    AdditionalPosition.POS3 -> intArrayOf(l0, 3, 6, 9)
+                }
+                else -> when (add) {
+                    AdditionalPosition.POS0 -> intArrayOf(l0)
+                    AdditionalPosition.POS1 -> intArrayOf(l0, 9)
+                    AdditionalPosition.POS2 -> intArrayOf(l0, 5, 9)
+                    AdditionalPosition.POS3 -> intArrayOf(l0, 3, 6, 9)
+                }
             }
         }
-        return a.distinct().toIntArray()
+        return result.distinct().toIntArray()
     }
 
     fun generate(config: Config): Result {
@@ -140,46 +167,68 @@ object NrDmrsV101 {
         require(config.allocationStartSymbol >= 0 && config.allocationStartSymbol + config.allocationSymbols <= config.symbolsPerSlot)
         require(config.ports.isNotEmpty())
         require(config.nSCID in 0..1 && config.nId in 0..65535)
+
         val l0 = when (config.mappingType) {
             MappingType.A -> if (config.typeAPosition3) 3 else 2
-            MappingType.B -> 0
+            MappingType.B -> config.allocationStartSymbol
         }
-        val ld = config.allocationSymbols
-        val base = singlePositions(config.mappingType, ld, l0, config.additionalPosition)
-            .filter { it >= config.allocationStartSymbol && it < config.allocationStartSymbol + config.allocationSymbols }
-        val timePositions = if (config.maxLength == MaxLength.LEN1) base else base.flatMap { intArrayOf(it, it + 1) }.distinct().toIntArray()
-        val out = ArrayList<Resource>()
+        val candidates = dmrsSymbols(config.mappingType, config.allocationSymbols, l0, config.additionalPosition)
+        val filtered = candidates.filter { it >= config.allocationStartSymbol && it < config.allocationStartSymbol + config.allocationSymbols }
+        val timePositions: IntArray = if (config.maxLength == MaxLength.LEN1) {
+            filtered.toIntArray()
+        } else {
+            val list = ArrayList<Int>()
+            for (l in filtered) {
+                list.add(l)
+                if (l + 1 < config.symbolsPerSlot) list.add(l + 1)
+            }
+            list.distinct().toIntArray()
+        }
+
+        val resources = ArrayList<Resource>()
         val seqMap = LinkedHashMap<Int, Array<NrDmrsMimoV90.Complex>>()
         val initMap = LinkedHashMap<Int, Long>()
-        val nREPerSymbol = when (config.configurationType) { ConfigurationType.TYPE1 -> 6 * config.resourceBlocks; ConfigurationType.TYPE2 -> 4 * config.resourceBlocks }
+        val sequenceLength = when (config.configurationType) {
+            ConfigurationType.TYPE1 -> 6 * config.resourceBlocks
+            ConfigurationType.TYPE2 -> 4 * config.resourceBlocks
+        }
+
         for (l in timePositions) {
-            val seq = sequence(config.slot, l, config.nId, config.nSCID, nREPerSymbol, config.symbolsPerSlot)
-            seqMap[l] = seq
+            val seq = sequence(config.slot, l, config.nId, config.nSCID, sequenceLength, config.symbolsPerSlot)
             val init = cInit(config.slot, l, config.nId, config.nSCID, config.symbolsPerSlot)
+            seqMap[l] = seq
             initMap[l] = init
             for (port in config.ports) {
                 val info = portInfo(port, config.configurationType)
                 var m = 0
                 val lPrime = if (config.maxLength == MaxLength.LEN2 && l != timePositions.first()) 1 else 0
-                val nGroups = if (config.configurationType == ConfigurationType.TYPE1) config.resourceBlocks else 2 * config.resourceBlocks
-                for (n in 0 until nGroups) {
-                    for (kp in 0..1) {
-                        val k = if (config.configurationType == ConfigurationType.TYPE1) {
-                            config.startSubcarrier + 12 * n + 2 * kp + info.delta
-                        } else {
-                            config.startSubcarrier + 6 * n + kp + info.delta
+                when (config.configurationType) {
+                    ConfigurationType.TYPE1 -> for (rb in 0 until config.resourceBlocks) {
+                        for (mGroup in 0..2) for (kPrime in 0..1) {
+                            val k = config.startSubcarrier + 12 * rb + 4 * mGroup + 2 * kPrime + info.delta
+                            if (k < config.startSubcarrier || k >= config.startSubcarrier + 12 * config.resourceBlocks) continue
+                            val value = seq[m]
+                            val wf = info.wf[kPrime]
+                            val wt = info.wt[lPrime.coerceAtMost(info.wt.lastIndex)]
+                            resources.add(Resource(port, k, l, NrDmrsMimoV90.Complex(value.re * wf * wt, value.im * wf * wt), init, m, info.lambda, kPrime, lPrime))
+                            m++
                         }
-                        if (k >= config.startSubcarrier + 12 * config.resourceBlocks) continue
-                        val value = seq[m.coerceAtMost(seq.lastIndex)]
-                        val wf = info.wf[kp]
-                        val wt = info.wt[lPrime.coerceAtMost(info.wt.lastIndex)]
-                        out += Resource(port, k, l, NrDmrsMimoV90.Complex(value.re * wf * wt, value.im * wf * wt), init, m, info.lambda, kp, lPrime)
-                        m++
+                    }
+                    ConfigurationType.TYPE2 -> for (rb in 0 until config.resourceBlocks) {
+                        for (mGroup in 0..1) for (kPrime in 0..1) {
+                            val k = config.startSubcarrier + 12 * rb + 6 * mGroup + kPrime + info.delta
+                            if (k < config.startSubcarrier || k >= config.startSubcarrier + 12 * config.resourceBlocks) continue
+                            val value = seq[m]
+                            val wf = info.wf[kPrime]
+                            val wt = info.wt[lPrime.coerceAtMost(info.wt.lastIndex)]
+                            resources.add(Resource(port, k, l, NrDmrsMimoV90.Complex(value.re * wf * wt, value.im * wf * wt), init, m, info.lambda, kPrime, lPrime))
+                            m++
+                        }
                     }
                 }
             }
         }
-        return Result(out, timePositions, initMap, seqMap)
+        return Result(resources, timePositions, initMap, seqMap)
     }
 
     fun pdsch(config: Config): Result = generate(config)
