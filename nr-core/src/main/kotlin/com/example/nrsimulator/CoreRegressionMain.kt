@@ -64,6 +64,8 @@ fun main() {
     runCatching { check("V74-V81 tests", NrResearchGradeV74V81Tests.run().pass) }.onFailure { check("V74-V81 tests", false) }
     runCatching { check("V82-V84 tests", NrResearchGradeV82V84Tests.run().pass) }.onFailure { check("V82-V84 tests", false) }
     runCatching { check("V85-V91 tests", NrResearchGradeV85V91Tests.run().pass) }.onFailure { check("V85-V91 tests", false) }
+    runCatching { check("V92-V100 tests", NrV92V100Tests.run().passed) }.onFailure { check("V92-V100 tests", false) }
+    runCatching { check("V101 exact DM-RS tests", NrDmrsV101Tests.run().passed) }.onFailure { check("V101 exact DM-RS tests", false) }
 
     val all = checks.values.all { it }
     println("CORE_REGRESSION=${if (all) "PASS" else "FAIL"}")
