@@ -3,7 +3,7 @@ package com.example.nrsimulator
 /**
  * Canonical additive NR PHY facade.
  *
- * This layer does not replace or delete V1-V100 implementations. It provides
+ * This layer does not replace or delete V1-V110 implementations. It provides
  * one stable composition point for the forward PHY path while the historical
  * versioned APIs remain available for compatibility and regression coverage.
  */
@@ -19,23 +19,20 @@ object NrCanonicalPhy {
 
     data class Stage<T>(val name: String, val value: T)
 
-    /**
-     * Canonical component registry. Keeping this explicit makes the intended
-     * ownership of each stage visible without changing existing implementations.
-     */
+    /** Canonical component ownership; legacy versioned implementations remain callable. */
     fun components(): List<String> = listOf(
+        "canonical execution -> NrCanonicalExecution",
         "transport+CRC+segmentation -> NrCodingChainV87/NrTransportV83",
         "LDPC -> NrLdpcV85/NrLdpcCodecV86",
         "rate matching -> NrCodingChainV87",
-        "QAM+scrambling+layer mapping -> NrPhyMappingV89",
-        "DMRS+channel estimation+scalar MIMO -> NrDmrsMimoV90",
+        "QAM+layer mapping -> NrPhyMappingV89",
+        "DMRS -> NrDmrsV101 / NrDmrsV92",
         "PDSCH/PUSCH resource mapping -> NrPdschPuschV91",
-        "DMRS resource/sequence primitives -> NrDmrsV92",
-        "exact PDSCH/PUSCH DMRS sequence+mapping -> NrDmrsV101",
-        "RE reservation/OFDM/MIMO/channel/soft LLR -> NrV102V110Additive",
-        "OFDM -> NrOfdmV93",
-        "MIMO -> NrMimoV94",
-        "channel -> NrChannelV95",
+        "OFDM -> NrOfdmV93 / NrV102V110Additive",
+        "MIMO -> NrMimoV94 / NrDmrsMimoV90",
+        "channel -> NrChannelV95 / NrV102V110Additive",
+        "soft QAM LLR -> NrEndToEndV100",
+        "rate recovery + LDPC decode + TB CRC -> NrRateMatchingV84/NrLdpcCodecV86/NrTransportV83",
         "link adaptation/CSI -> NrLinkAdaptationV96",
         "HARQ -> NrHarqCsiV97",
         "PRACH -> NrRachV98",
@@ -52,4 +49,8 @@ object NrCanonicalPhy {
         }
         return components()
     }
+
+    /** Stable execution entry point for the canonical forward PHY path. */
+    fun execute(config: NrCanonicalExecution.Config = NrCanonicalExecution.Config()): NrCanonicalExecution.Report =
+        NrCanonicalExecution.run(config)
 }
