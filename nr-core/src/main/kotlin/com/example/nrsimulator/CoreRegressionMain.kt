@@ -26,6 +26,7 @@ fun main() {
     runCatching { check("V101 exact DM-RS tests",NrDmrsV101Tests.run().passed) }.onFailure { check("V101 exact DM-RS tests",false) }
     runCatching { check("V102-V110 tests",NrV102V110Tests.run().passed) }.onFailure { check("V102-V110 tests",false) }
     runCatching { check("Canonical spatial engine tests",NrCanonicalSpatialEngineTests.run().passed) }.onFailure { check("Canonical spatial engine tests",false) }
+    runCatching { check("V116 DM-RS MIMO tests",NrCanonicalDmrsMimoV116Tests.run().passed) }.onFailure { check("V116 DM-RS MIMO tests",false) }
     runCatching { check("Canonical PHY execution",NrCanonicalExecutionTests.run().passed) }.onFailure { check("Canonical PHY execution",false) }
     val all=checks.values.all{it}; println("CORE_REGRESSION=${if(all)"PASS"else"FAIL"}"); if(!all) error("Core regression failed")
 }
