@@ -32,14 +32,14 @@ object NrCanonicalDmrsMimoV116 {
     )
 
     fun run(config: Config = Config()): Report {
-        require(config.layers in 1..4)
+        require(config.layers in 1..2)
         require(config.txAntennas >= config.layers && config.rxAntennas >= config.layers)
         require(config.fftSize > 0 && (config.fftSize and (config.fftSize - 1)) == 0)
         require(config.resourceBlocks > 0 && 12 * config.resourceBlocks <= config.fftSize)
         require(config.snrDb.isFinite())
 
-        // Ports 1000,1002,1004,1006 use distinct TYPE-1 frequency offsets. This gives
-        // deterministic orthogonal pilot locations while retaining the V101 port rules.
+        // TYPE-1 ports 1000 and 1002 have distinct frequency offsets, giving
+        // deterministic orthogonal pilot locations for this 1-2 layer milestone.
         val ports = IntArray(config.layers) { 1000 + 2 * it }
         val dmrs = NrDmrsV101.pdsch(
             NrDmrsV101.Config(
@@ -74,18 +74,14 @@ object NrCanonicalDmrsMimoV116 {
         val dataBits = IntArray(dataPositions.size * config.layers * 2) { (it + 3) and 1 }
         val qam = NrPhyMappingV89.modulate(dataBits, NrPhyMappingV89.Modulation.QPSK)
         var q = 0
-        for (k in dataPositions) {
-            for (layer in 0 until config.layers) {
-                val z = qam[q++ % qam.size]
-                dataSymbols[layer][k] = NrCanonicalSpatialEngine.C(z.re, z.im)
-                txFreq[layer][k] = dataSymbols[layer][k]
-            }
+        for (k in dataPositions) for (layer in 0 until config.layers) {
+            val z = qam[q++]
+            dataSymbols[layer][k] = NrCanonicalSpatialEngine.C(z.re, z.im)
+            txFreq[layer][k] = dataSymbols[layer][k]
         }
-        for (layer in 0 until config.layers) {
-            for ((k, x) in pilotByLayer[layer]) {
-                for (t in 0 until config.txAntennas) txFreq[t][k] = NrCanonicalSpatialEngine.C(0.0, 0.0)
-                txFreq[layer][k] = x
-            }
+        for (layer in 0 until config.layers) for ((k, x) in pilotByLayer[layer]) {
+            for (t in 0 until config.txAntennas) txFreq[t][k] = NrCanonicalSpatialEngine.C(0.0, 0.0)
+            txFreq[layer][k] = x
         }
 
         val txTime = Array(config.txAntennas) { t -> NrCanonicalSpatialEngine.fft(txFreq[t], inverse = true) }
@@ -102,13 +98,11 @@ object NrCanonicalDmrsMimoV116 {
 
         var err = 0.0
         var ref = 0.0
-        var count = 0
         for (layer in 0 until config.layers) for (k in dataPositions) {
             val a = detection.symbols[layer][k]
             val b = dataSymbols[layer][k]
             err += (a.re - b.re) * (a.re - b.re) + (a.im - b.im) * (a.im - b.im)
             ref += b.abs2()
-            count++
         }
         val evm = sqrt(err / ref.coerceAtLeast(1e-18))
         var channelMse = 0.0
@@ -147,32 +141,23 @@ object NrCanonicalDmrsMimoV116 {
         for (t in 0 until layers) {
             val pilots = pilotByLayer[t].sortedBy { it.first }
             require(pilots.isNotEmpty())
-            for (r in 0 until rx) {
-                for ((k, x) in pilots) h[k][r][t] = received[r][k] / x
-                for (k in 0 until nsc) if (pilots.none { it.first == k }) {
+            for (r in 0 until rx) for (k in 0 until nsc) {
+                val exact = pilots.firstOrNull { it.first == k }
+                if (exact != null) {
+                    h[k][r][t] = received[r][k] / exact.second
+                } else {
                     val lo = pilots.lastOrNull { it.first < k }
                     val hi = pilots.firstOrNull { it.first > k }
-                    val l = lo ?: hi!!
-                    val u = hi ?: lo!!
-                    val a = if (u.first == l.first) 0.0 else (k - l.first).toDouble() / (u.first - l.first)
-                    h[k][r][t] = l.secondChannel(h, received, r, t, a, l.first, u.first)
+                    val left = lo ?: hi!!
+                    val right = hi ?: lo!!
+                    val alpha = if (right.first == left.first) 0.0 else
+                        (k - left.first).toDouble() / (right.first - left.first)
+                    val hl = received[r][left.first] / left.second
+                    val hu = received[r][right.first] / right.second
+                    h[k][r][t] = hl * (1.0 - alpha) + hu * alpha
                 }
             }
         }
         return h
-    }
-
-    private fun Pair<Int, NrCanonicalSpatialEngine.C>.secondChannel(
-        h: Array<Array<Array<NrCanonicalSpatialEngine.C>>>,
-        received: Array<Array<NrCanonicalSpatialEngine.C>>,
-        r: Int,
-        t: Int,
-        a: Double,
-        lo: Int,
-        hi: Int
-    ): NrCanonicalSpatialEngine.C {
-        val l = h[lo][r][t]
-        val u = h[hi][r][t]
-        return l * (1.0 - a) + u * a
     }
 }
