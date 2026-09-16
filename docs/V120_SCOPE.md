@@ -1,0 +1,1 @@
+V120 implements the TR 38.901 Section 7.7.2 TDL-A..E link-level profiles, Section 7.7.3 delay scaling, and D/E first-tap Ricean handling while retaining the existing canonical spatial engine.
