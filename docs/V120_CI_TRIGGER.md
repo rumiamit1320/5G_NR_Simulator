@@ -1,0 +1,1 @@
+V120 CI validation is performed through the pull request workflow after the implementation is staged on its feature branch.
