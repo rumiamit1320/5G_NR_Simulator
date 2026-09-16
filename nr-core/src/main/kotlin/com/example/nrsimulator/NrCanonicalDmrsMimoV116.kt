@@ -93,7 +93,7 @@ object NrCanonicalDmrsMimoV116 {
         val wf = NrCanonicalSpatialEngine.applyTdl(txTime, taps, config.snrDb, config.seed)
         val rxFreq = Array(config.rxAntennas) { r -> NrCanonicalSpatialEngine.fft(wf.output[r]) }
         val estimated = estimateSparsePilots(rxFreq, pilotByLayer, config.fftSize, config.rxAntennas, config.layers)
-        val channelEstimated = estimated.all { row -> row.all { it.re.isFinite() && it.im.isFinite() } }
+        val channelEstimated = estimated.all { row -> row.all { cell -> cell.all { it.re.isFinite() && it.im.isFinite() } } }
         val detection = NrCanonicalSpatialEngine.detect(rxFreq, estimated, wf.noiseVariance, "MMSE")
 
         var err = 0.0
