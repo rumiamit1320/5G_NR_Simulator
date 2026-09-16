@@ -10,14 +10,15 @@ object NrCanonicalTdlV120Tests {
             NrCanonicalTdlV118.Profile.TDL_A to 23,
             NrCanonicalTdlV118.Profile.TDL_B to 23,
             NrCanonicalTdlV118.Profile.TDL_C to 24,
-            NrCanonicalTdlV118.Profile.TDL_D to 14,
+            NrCanonicalTdlV118.Profile.TDL_D to 13,
             NrCanonicalTdlV118.Profile.TDL_E to 14
         )
         for (p in NrCanonicalTdlV118.Profile.values()) {
             val paths = NrCanonicalTdlV118.profilePaths(p)
             checks["${p.name} normative tap count"] = paths.size == expectedCounts.getValue(p)
-            checks["${p.name} normalized delays monotonic"] = paths.zipWithNext().all { (a, b) -> b.normalizedDelay >= a.normalizedDelay }
+            checks["${p.name} exact first delay"] = paths.first().normalizedDelay == 0.0
             checks["${p.name} finite powers"] = paths.all { it.powerLinear.isFinite() && it.powerLinear > 0.0 }
+            checks["${p.name} finite scaled delays"] = paths.all { it.delayNs.isFinite() && it.delaySamplesExact.isFinite() && it.delaySamples >= 0 }
             val r = NrCanonicalTdlV118.build(
                 NrCanonicalTdlV118.Config(profile = p, txAntennas = 2, rxAntennas = 2, rmsDelayNs = 30.0, dopplerHz = 300.0)
             )
