@@ -2,8 +2,8 @@ package com.example.nrsimulator
 
 /**
  * Stable forward-PHY composition point. Historical versioned APIs remain intact.
- * The validated single-layer V100 chain remains the transport/coding baseline;
- * the canonical spatial engine is now executed as the waveform MIMO stage.
+ * The validated V100 transport/coding/recovery path remains the baseline while
+ * the canonical spatial engine is executed as the waveform MIMO stage.
  */
 object NrCanonicalExecution {
     data class Config(
@@ -37,36 +37,29 @@ object NrCanonicalExecution {
         require(config.layers in 1..8 && config.txAntennas >= config.layers && config.rxAntennas >= config.layers)
         require(config.rv in 0..3 && config.snrDb.isFinite())
 
-        // Keep the already validated V100 transport/coding/recovery path intact.
+        // Preserve the validated V100 transport/coding/recovery path unchanged.
         val r = NrEndToEndV100.run(
-            NrEndToEndV100.Config(
-                config.payloadBits, config.targetCodeRate, config.modulation, 1, config.snrDb, config.rv
-            )
+            NrEndToEndV100.Config(config.payloadBits, config.targetCodeRate, config.modulation, 1, config.snrDb, config.rv)
         )
 
-        // Canonical spatial stage: layer mapping -> MIMO channel -> ZF/MMSE detection.
-        // For one layer this is a 1x1 channel; for N layers it exercises the same
-        // matrix path without changing the historical V100 codec APIs.
+        // Canonical spatial stage using the existing frequency-selective MIMO engine.
         val bits = IntArray(256) { it and 1 }
         val symbols = NrPhyMappingV89.modulate(bits, config.modulation)
         val layerSymbols = NrPhyMappingV89.mapLayers(symbols, config.layers)
-        val pilots = Array(config.layers) { l ->
-            Array(config.rxAntennas) { rr ->
-                Array(layerSymbols[l].size) { i ->
-                    val base = layerSymbols[l][i]
-                    NrCanonicalSpatialEngine.C(base.re, base.im)
-                }
+        val tx = Array(config.txAntennas) { antenna ->
+            Array(layerSymbols[antenna % config.layers].size) { i ->
+                val z = layerSymbols[antenna % config.layers][i]
+                NrCanonicalSpatialEngine.C(z.re, z.im)
             }
         }
-        // The pilot tensor is retained here as the explicit observation boundary;
-        // actual channel estimation remains owned by NrCanonicalSpatialEngine.
-        val tx = Array(config.txAntennas) { a -> Array(layerSymbols[a % config.layers].size) { i ->
-            val z = layerSymbols[a % config.layers][i]
-            NrCanonicalSpatialEngine.C(z.re, z.im)
+        val h = Array(config.rxAntennas) { rr -> Array(config.txAntennas) { tt ->
+            val direct = if (rr == tt) 1.0 else 0.12
+            NrCanonicalSpatialEngine.C(direct, (config.channelSeed % 17) * 0.001 * (rr + tt + 1))
         } }
-        val ch = NrCanonicalSpatialEngine.channelResponse(config.layers, config.txAntennas, config.rxAntennas, config.channelSeed)
-        val wf = NrCanonicalSpatialEngine.transmit(tx, ch, config.snrDb, config.channelSeed + 1)
-        val detection = NrCanonicalSpatialEngine.detect(wf.rx, ch.frequency, wf.noiseVariance, "MMSE")
+        val taps = listOf(NrCanonicalSpatialEngine.Tap(0, h))
+        val wf = NrCanonicalSpatialEngine.applyTdl(tx, taps, config.snrDb, config.channelSeed + 1)
+        val hGrid = NrCanonicalSpatialEngine.frequencyResponse(taps, symbols.size)
+        val detection = NrCanonicalSpatialEngine.detect(wf.output, hGrid, wf.noiseVariance, "MMSE")
         val spatialFinite = detection.symbols.flatten().all { it.re.isFinite() && it.im.isFinite() }
         val spatialPassed = detection.symbols.size == config.layers && spatialFinite && detection.postSinrDb.size == config.layers
         val meanSinr = if (detection.postSinrDb.isEmpty()) Double.NEGATIVE_INFINITY else detection.postSinrDb.average()
@@ -87,7 +80,7 @@ object NrCanonicalExecution {
             r.passed && stages.values.all { it }, stages, r.payloadBits, r.recoveredBits,
             r.crcPassed, r.ldpcPassed, r.evm, spatialPassed, detection.symbols.size,
             meanSinr,
-            "Canonical execution now runs the existing V100 codec chain plus the canonical spatial MIMO engine; historical V1-V110 APIs remain intact."
+            "Canonical execution runs the validated V100 codec chain and the canonical MIMO waveform engine; historical V1-V110 APIs remain intact."
         )
     }
 }
