@@ -1,14 +1,11 @@
 package com.example.nrsimulator
 
-import kotlin.math.log10
 import kotlin.math.sqrt
 
 /**
- * V117 coherent canonical PHY: real V87 codeword -> QAM/layers -> V101 DM-RS ->
- * OFDM/MIMO channel -> pilot LS estimate -> MMSE -> soft demod -> V84 recovery ->
- * V86 LDPC -> V83 TB CRC.
- *
- * Existing versioned APIs are retained; this is an additive canonical execution path.
+ * V117 coherent canonical PHY retained as the public implementation surface.
+ * V119 adds an optional frequency-selective TDL channel while preserving the
+ * existing V117 configuration defaults and report shape.
  */
 object NrCanonicalPhyV117 {
     data class Config(
@@ -22,7 +19,8 @@ object NrCanonicalPhyV117 {
         val rv: Int = 0,
         val fftSize: Int = 2048,
         val resourceBlocks: Int = 8,
-        val seed: Int = 27117
+        val seed: Int = 27117,
+        val tdlProfile: NrCanonicalTdlV118.Profile? = null
     )
 
     data class Report(
@@ -103,11 +101,33 @@ object NrCanonicalPhyV117 {
         }
 
         val txTime = Array(config.txAntennas) { NrCanonicalSpatialEngine.fft(txFreq[it], inverse = true) }
-        val h = Array(config.rxAntennas) { r -> Array(config.txAntennas) { t ->
+        val tdl = config.tdlProfile?.let {
+            NrCanonicalTdlV118.build(
+                NrCanonicalTdlV118.Config(
+                    profile = it,
+                    txAntennas = config.txAntennas,
+                    rxAntennas = config.rxAntennas,
+                    sampleRateHz = 30.72e6,
+                    rmsDelayNs = 30.0,
+                    dopplerHz = 0.0,
+                    seed = config.seed + 118
+                )
+            )
+        }
+        val directH = Array(config.rxAntennas) { r -> Array(config.txAntennas) { t ->
             NrCanonicalSpatialEngine.C(if (r == t) 1.0 else 0.08, 0.002 * (r + t + 1))
         } }
-        val wf = NrCanonicalSpatialEngine.applyTdl(txTime, listOf(NrCanonicalSpatialEngine.Tap(0, h)), config.snrDb, config.seed)
-        val rxFreq = Array(config.rxAntennas) { NrCanonicalSpatialEngine.fft(wf.output[it]) }
+        val taps = tdl?.taps ?: listOf(NrCanonicalSpatialEngine.Tap(0, directH))
+        val maxDelay = taps.maxOf { it.delay }
+        val cp = if (tdl != null) maxDelay else 0
+        val txWithCp = Array(config.txAntennas) { t ->
+            Array(config.fftSize + cp) { i -> txTime[t][if (i < cp) config.fftSize - cp + i else i - cp] }
+        }
+        val wf = NrCanonicalSpatialEngine.applyTdl(txWithCp, taps, config.snrDb, config.seed)
+        val rxFreq = Array(config.rxAntennas) { r ->
+            val useful = wf.output[r].copyOfRange(cp, cp + config.fftSize)
+            NrCanonicalSpatialEngine.fft(useful)
+        }
         val estimated = estimateFromDmrs(rxFreq, pilots, config.fftSize, config.rxAntennas, config.layers)
         val channelEstimated = estimated.all { it.all { row -> row.all { c -> c.re.isFinite() && c.im.isFinite() } } }
         val detected = NrCanonicalSpatialEngine.detect(rxFreq, estimated, wf.noiseVariance, "MMSE")
@@ -138,16 +158,25 @@ object NrCanonicalPhyV117 {
         }
         val evm = sqrt(err / ref.coerceAtLeast(1e-18))
         val postSinr = if (detected.postSinrDb.isEmpty()) Double.NEGATIVE_INFINITY else detected.postSinrDb.filter { it.isFinite() }.average()
-        var mse = 0.0; var href = 0.0
+        var mse = 0.0
+        var href = 0.0
+        val referenceH = if (tdl != null) NrCanonicalTdlV118.frequencyResponse(
+            NrCanonicalTdlV118.Config(profile = config.tdlProfile!!, txAntennas = config.txAntennas, rxAntennas = config.rxAntennas, seed = config.seed + 118), config.fftSize
+        ) else Array(config.fftSize) { directH }
         for (k in 0 until config.fftSize) for (r in 0 until config.rxAntennas) for (t in 0 until config.txAntennas) {
-            val a = estimated[k][r][t]; val b = h[r][t]
+            val a = estimated[k][r][t]; val b = referenceH[k][r][t]
             val dr = a.re - b.re; val di = a.im - b.im
             mse += dr * dr + di * di; href += b.abs2()
         }
         mse /= href.coerceAtLeast(1e-18)
         val equalized = detected.symbols.size == config.layers && detected.symbols.all { it.size == config.fftSize } && evm.isFinite()
         val passed = crcPassed && ldpcPassed && dmrsMapped && channelEstimated && equalized
-        return Report(passed, crcPassed, ldpcPassed, dmrsMapped, channelEstimated, equalized, config.payloadBits, decodedTransport.size, usable, evm, postSinr, mse, pilots.sumOf { it.size }, "V117 uses the actual V87 rate-matched codeword on the DM-RS-aware resource grid; received DM-RS drives channel estimation, MMSE recovers layers, and recovered soft LLRs feed V84/V86 and the real V83 TB CRC.")
+        val note = if (tdl == null) {
+            "V117 baseline path: deterministic flat MIMO channel."
+        } else {
+            "V119 TDL-${config.tdlProfile.name} path: V87 coded transport -> QAM/layers -> V101 DM-RS -> CP/OFDM -> V118 frequency-selective MIMO TDL -> OFDM -> DM-RS LS estimation -> MMSE -> soft LLR -> V84/V86 -> V83 TB CRC."
+        }
+        return Report(passed, crcPassed, ldpcPassed, dmrsMapped, channelEstimated, equalized, config.payloadBits, decodedTransport.size, usable, evm, postSinr, mse, pilots.sumOf { it.size }, note)
     }
 
     private fun estimateFromDmrs(received: Array<Array<NrCanonicalSpatialEngine.C>>, pilots: Array<ArrayList<Pair<Int, NrCanonicalSpatialEngine.C>>>, nsc: Int, rx: Int, tx: Int): Array<Array<Array<NrCanonicalSpatialEngine.C>>> {
