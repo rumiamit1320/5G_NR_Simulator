@@ -1,0 +1,1 @@
+Reference implementation basis: 3GPP TR 38.901 v19.3.0, Section 7.7.2 TDL-A through TDL-E and Section 7.7.3 delay scaling. The current simulator discretizes scaled delays to its sample grid and uses the existing canonical spatial engine for MIMO convolution.
