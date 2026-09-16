@@ -49,6 +49,26 @@ object NrCanonicalTdlV121Tests {
         )
         checks["2x2 MIMO tap dimensions"] = twoByTwo.taps.all { it.h.size == 2 && it.h.all { row -> row.size == 2 } }
 
+        val phy = NrCanonicalPhyV117.run(
+            NrCanonicalPhyV117.Config(
+                payloadBits = 512,
+                targetCodeRate = 0.5,
+                snrDb = 80.0,
+                txAntennas = 1,
+                rxAntennas = 1,
+                layers = 1,
+                tdlProfile = NrCanonicalTdlV118.Profile.TDL_A,
+                timeVaryingTdl = true,
+                tdlDopplerHz = 500.0,
+                tdlTimeSeconds = 2.0e-3,
+                tdlJakesOscillators = 32,
+                seed = 12117
+            )
+        )
+        checks["V121 canonical PHY channel estimated"] = phy.channelEstimated
+        checks["V121 canonical PHY equalized"] = phy.equalized
+        checks["V121 canonical PHY transport recovered"] = phy.transportCrcPassed
+
         return Result(checks.values.all { it }, checks)
     }
 
