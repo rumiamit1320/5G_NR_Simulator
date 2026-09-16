@@ -65,9 +65,9 @@ object NrCanonicalExecution {
         val meanSinr = if (detection.postSinrDb.isEmpty()) Double.NEGATIVE_INFINITY else detection.postSinrDb.average()
 
         val stages = linkedMapOf(
-            "transport+TB-CRC" to r.payloadBits > 0,
+            "transport+TB-CRC" to (r.payloadBits > 0),
             "LDPC+rate-matching" to r.ldpcPassed,
-            "QAM+layer-mapping" to r.qamSymbols > 0 && layerSymbols.size == config.layers,
+            "QAM+layer-mapping" to (r.qamSymbols > 0 && layerSymbols.size == config.layers),
             "DMRS" to true,
             "PDSCH-grid+OFDM" to (r.ofdmSymbols > 0 && r.fftSize > 0),
             "channel+MIMO-waveform" to spatialPassed,
