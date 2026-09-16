@@ -5,7 +5,8 @@ import kotlin.math.sqrt
 /**
  * V117 coherent canonical PHY retained as the public implementation surface.
  * V119 adds an optional frequency-selective TDL channel while preserving the
- * existing V117 configuration defaults and report shape.
+ * existing V117 configuration defaults and report shape. V121 adds an opt-in
+ * time-varying Jakes realization without changing the default V118/V119 path.
  */
 object NrCanonicalPhyV117 {
     data class Config(
@@ -20,7 +21,11 @@ object NrCanonicalPhyV117 {
         val fftSize: Int = 2048,
         val resourceBlocks: Int = 8,
         val seed: Int = 27117,
-        val tdlProfile: NrCanonicalTdlV118.Profile? = null
+        val tdlProfile: NrCanonicalTdlV118.Profile? = null,
+        val timeVaryingTdl: Boolean = false,
+        val tdlDopplerHz: Double = 0.0,
+        val tdlTimeSeconds: Double = 0.0,
+        val tdlJakesOscillators: Int = 32
     )
 
     data class Report(
@@ -45,6 +50,8 @@ object NrCanonicalPhyV117 {
         require(config.layers in 1..2 && config.txAntennas >= config.layers && config.rxAntennas >= config.layers)
         require(config.rv in 0..3 && config.fftSize > 0 && (config.fftSize and (config.fftSize - 1)) == 0)
         require(12 * config.resourceBlocks <= config.fftSize)
+        require(config.tdlDopplerHz >= 0.0 && config.tdlDopplerHz.isFinite())
+        require(config.tdlTimeSeconds.isFinite() && config.tdlJakesOscillators >= 8)
 
         val payload = IntArray(config.payloadBits) { (it * 17 + 3) and 1 }
         val bg = NrLdpcV82.selectBaseGraph(config.payloadBits, config.targetCodeRate)
@@ -100,19 +107,37 @@ object NrCanonicalPhyV117 {
             txFreq[layer][k] = x
         }
 
-        val txTime = Array(config.txAntennas) { NrCanonicalSpatialEngine.fft(txFreq[it], inverse = true) }
-        val tdl = config.tdlProfile?.let {
-            NrCanonicalTdlV118.build(
-                NrCanonicalTdlV118.Config(
-                    profile = it,
-                    txAntennas = config.txAntennas,
-                    rxAntennas = config.rxAntennas,
-                    sampleRateHz = 30.72e6,
-                    rmsDelayNs = 30.0,
-                    dopplerHz = 0.0,
-                    seed = config.seed + 118
+        val txTime = Array(config.txAntennas) { t -> NrCanonicalSpatialEngine.fft(txFreq[t], inverse = true) }
+        val tdl = config.tdlProfile?.let { profile ->
+            if (config.timeVaryingTdl) {
+                NrCanonicalTdlV121.buildAtTime(
+                    NrCanonicalTdlV121.Config(
+                        tdl = NrCanonicalTdlV118.Config(
+                            profile = profile,
+                            txAntennas = config.txAntennas,
+                            rxAntennas = config.rxAntennas,
+                            sampleRateHz = 30.72e6,
+                            rmsDelayNs = 30.0,
+                            dopplerHz = config.tdlDopplerHz,
+                            seed = config.seed + 118
+                        ),
+                        oscillators = config.tdlJakesOscillators
+                    ),
+                    config.tdlTimeSeconds
                 )
-            )
+            } else {
+                NrCanonicalTdlV118.build(
+                    NrCanonicalTdlV118.Config(
+                        profile = profile,
+                        txAntennas = config.txAntennas,
+                        rxAntennas = config.rxAntennas,
+                        sampleRateHz = 30.72e6,
+                        rmsDelayNs = 30.0,
+                        dopplerHz = 0.0,
+                        seed = config.seed + 118
+                    )
+                )
+            }
         }
         val directH = Array(config.rxAntennas) { r -> Array(config.txAntennas) { t ->
             NrCanonicalSpatialEngine.C(if (r == t) 1.0 else 0.08, 0.002 * (r + t + 1))
@@ -160,9 +185,31 @@ object NrCanonicalPhyV117 {
         val postSinr = if (detected.postSinrDb.isEmpty()) Double.NEGATIVE_INFINITY else detected.postSinrDb.filter { it.isFinite() }.average()
         var mse = 0.0
         var href = 0.0
-        val referenceH = if (tdl != null) NrCanonicalTdlV118.frequencyResponse(
-            NrCanonicalTdlV118.Config(profile = config.tdlProfile!!, txAntennas = config.txAntennas, rxAntennas = config.rxAntennas, seed = config.seed + 118), config.fftSize
-        ) else Array(config.fftSize) { directH }
+        val referenceH = if (tdl != null) {
+            if (config.timeVaryingTdl) {
+                NrCanonicalTdlV121.frequencyResponseAtTime(
+                    NrCanonicalTdlV121.Config(
+                        tdl = NrCanonicalTdlV118.Config(
+                            profile = config.tdlProfile!!,
+                            txAntennas = config.txAntennas,
+                            rxAntennas = config.rxAntennas,
+                            sampleRateHz = 30.72e6,
+                            rmsDelayNs = 30.0,
+                            dopplerHz = config.tdlDopplerHz,
+                            seed = config.seed + 118
+                        ),
+                        oscillators = config.tdlJakesOscillators
+                    ),
+                    config.fftSize,
+                    config.tdlTimeSeconds
+                )
+            } else {
+                NrCanonicalTdlV118.frequencyResponse(
+                    NrCanonicalTdlV118.Config(profile = config.tdlProfile!!, txAntennas = config.txAntennas, rxAntennas = config.rxAntennas, seed = config.seed + 118),
+                    config.fftSize
+                )
+            }
+        } else Array(config.fftSize) { directH }
         for (k in 0 until config.fftSize) for (r in 0 until config.rxAntennas) for (t in 0 until config.txAntennas) {
             val a = estimated[k][r][t]; val b = referenceH[k][r][t]
             val dr = a.re - b.re; val di = a.im - b.im
@@ -171,10 +218,10 @@ object NrCanonicalPhyV117 {
         mse /= href.coerceAtLeast(1e-18)
         val equalized = detected.symbols.size == config.layers && detected.symbols.all { it.size == config.fftSize } && evm.isFinite()
         val passed = crcPassed && ldpcPassed && dmrsMapped && channelEstimated && equalized
-        val note = if (tdl == null) {
-            "V117 baseline path: deterministic flat MIMO channel."
-        } else {
-            "V119 TDL-${config.tdlProfile.name} path: V87 coded transport -> QAM/layers -> V101 DM-RS -> CP/OFDM -> V118 frequency-selective MIMO TDL -> OFDM -> DM-RS LS estimation -> MMSE -> soft LLR -> V84/V86 -> V83 TB CRC."
+        val note = when {
+            tdl == null -> "V117 baseline path: deterministic flat MIMO channel."
+            config.timeVaryingTdl -> "V121 Jakes TDL-${config.tdlProfile.name} path: V87 coded transport -> QAM/layers -> V101 DM-RS -> CP/OFDM -> V121 time-varying TDL -> OFDM -> DM-RS LS estimation -> MMSE -> soft LLR -> V84/V86 -> V83 TB CRC."
+            else -> "V119 TDL-${config.tdlProfile.name} path: V87 coded transport -> QAM/layers -> V101 DM-RS -> CP/OFDM -> V118 frequency-selective MIMO TDL -> OFDM -> DM-RS LS estimation -> MMSE -> soft LLR -> V84/V86 -> V83 TB CRC."
         }
         return Report(passed, crcPassed, ldpcPassed, dmrsMapped, channelEstimated, equalized, config.payloadBits, decodedTransport.size, usable, evm, postSinr, mse, pilots.sumOf { it.size }, note)
     }
