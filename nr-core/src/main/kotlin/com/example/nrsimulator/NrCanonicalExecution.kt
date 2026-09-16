@@ -1,10 +1,6 @@
 package com.example.nrsimulator
 
-/**
- * Stable forward-PHY composition point. Historical versioned APIs remain intact.
- * The validated V100 transport/coding/recovery path remains the baseline while
- * the canonical spatial engine is executed as the waveform MIMO stage.
- */
+/** Stable canonical PHY facade. Historical versioned APIs remain intact. */
 object NrCanonicalExecution {
     data class Config(
         val payloadBits: Int = 512,
@@ -34,53 +30,46 @@ object NrCanonicalExecution {
 
     fun run(config: Config = Config()): Report {
         require(config.payloadBits > 0 && config.targetCodeRate in 0.01..0.99)
-        require(config.layers in 1..8 && config.txAntennas >= config.layers && config.rxAntennas >= config.layers)
+        require(config.layers in 1..2 && config.txAntennas >= config.layers && config.rxAntennas >= config.layers)
         require(config.rv in 0..3 && config.snrDb.isFinite())
 
-        // Preserve the validated V100 transport/coding/recovery path unchanged.
-        val r = NrEndToEndV100.run(
-            NrEndToEndV100.Config(config.payloadBits, config.targetCodeRate, config.modulation, 1, config.snrDb, config.rv)
+        val r = NrCanonicalPhyV117.run(
+            NrCanonicalPhyV117.Config(
+                payloadBits = config.payloadBits,
+                targetCodeRate = config.targetCodeRate,
+                modulation = config.modulation,
+                layers = config.layers,
+                txAntennas = config.txAntennas,
+                rxAntennas = config.rxAntennas,
+                snrDb = config.snrDb,
+                rv = config.rv,
+                seed = config.channelSeed
+            )
         )
-
-        // Canonical spatial stage using the existing frequency-selective MIMO engine.
-        val bits = IntArray(256) { it and 1 }
-        val symbols = NrPhyMappingV89.modulate(bits, config.modulation)
-        val layerSymbols = NrPhyMappingV89.mapLayers(symbols, config.layers)
-        val tx = Array(config.txAntennas) { antenna ->
-            Array(layerSymbols[antenna % config.layers].size) { i ->
-                val z = layerSymbols[antenna % config.layers][i]
-                NrCanonicalSpatialEngine.C(z.re, z.im)
-            }
-        }
-        val h = Array(config.rxAntennas) { rr -> Array(config.txAntennas) { tt ->
-            val direct = if (rr == tt) 1.0 else 0.12
-            NrCanonicalSpatialEngine.C(direct, (config.channelSeed % 17) * 0.001 * (rr + tt + 1))
-        } }
-        val taps = listOf(NrCanonicalSpatialEngine.Tap(0, h))
-        val wf = NrCanonicalSpatialEngine.applyTdl(tx, taps, config.snrDb, config.channelSeed + 1)
-        val hGrid = NrCanonicalSpatialEngine.frequencyResponse(taps, symbols.size)
-        val detection = NrCanonicalSpatialEngine.detect(wf.output, hGrid, wf.noiseVariance, "MMSE")
-        val spatialFinite = detection.symbols.flatten().all { it.re.isFinite() && it.im.isFinite() }
-        val spatialPassed = detection.symbols.size == config.layers && spatialFinite && detection.postSinrDb.size == config.layers
-        val meanSinr = if (detection.postSinrDb.isEmpty()) Double.NEGATIVE_INFINITY else detection.postSinrDb.average()
-
         val stages = linkedMapOf(
-            "transport+TB-CRC" to (r.payloadBits > 0),
+            "transport+TB-CRC" to r.transportCrcPassed,
             "LDPC+rate-matching" to r.ldpcPassed,
-            "QAM+layer-mapping" to (r.qamSymbols > 0 && layerSymbols.size == config.layers),
-            "DMRS" to true,
-            "PDSCH-grid+OFDM" to (r.ofdmSymbols > 0 && r.fftSize > 0),
-            "channel+MIMO-waveform" to spatialPassed,
-            "DMRS-channel-estimation boundary" to spatialFinite,
-            "MMSE-equalization+layer-recovery" to spatialPassed,
+            "QAM+layer-mapping" to (r.transmittedBits > 0),
+            "DMRS" to r.dmrsMapped,
+            "PDSCH-grid+OFDM" to r.dmrsMapped,
+            "channel+MIMO-waveform" to r.equalized,
+            "DMRS-channel-estimation" to r.channelEstimated,
+            "MMSE-equalization+layer-recovery" to r.equalized,
             "soft-LLR+LDPC-recovery" to r.ldpcPassed,
-            "TB-CRC-check" to r.crcPassed
+            "TB-CRC-check" to r.transportCrcPassed
         )
         return Report(
-            r.passed && stages.values.all { it }, stages, r.payloadBits, r.recoveredBits,
-            r.crcPassed, r.ldpcPassed, r.evm, spatialPassed, detection.symbols.size,
-            meanSinr,
-            "Canonical execution runs the validated V100 codec chain and the canonical MIMO waveform engine; historical V1-V110 APIs remain intact."
+            r.passed && stages.values.all { it },
+            stages,
+            r.payloadBits,
+            r.recoveredBits,
+            r.transportCrcPassed,
+            r.ldpcPassed,
+            r.evm,
+            r.equalized,
+            config.layers,
+            r.postSinrDb,
+            "Canonical execution is now the coherent V117 coded waveform path: V87 codeword, V101 DM-RS, OFDM/MIMO, received-pilot channel estimation, MMSE, soft LLR, V84/V86 recovery, and V83 TB CRC."
         )
     }
 }
