@@ -32,6 +32,7 @@ fun main() {
     runCatching { check("V119 TDL coded PHY tests",NrCanonicalPhyV119Tests.run().passed) }.onFailure { check("V119 TDL coded PHY tests",false) }
     runCatching { check("V120 normative TDL tests",NrCanonicalTdlV120Tests.run().passed) }.onFailure { check("V120 normative TDL tests",false) }
     runCatching { check("V121 Jakes Doppler tests",NrCanonicalTdlV121Tests.run().passed) }.onFailure { check("V121 Jakes Doppler tests",false) }
+    runCatching { check("V122 time-sequence coded PHY tests",NrCanonicalPhyV122Tests.run().passed) }.onFailure { check("V122 time-sequence coded PHY tests",false) }
     runCatching { check("Canonical PHY execution",NrCanonicalExecutionTests.run().passed) }.onFailure { check("Canonical PHY execution",false) }
     val all=checks.values.all{it}; println("CORE_REGRESSION=${if(all)"PASS"else"FAIL"}"); if(!all) error("Core regression failed")
 }
