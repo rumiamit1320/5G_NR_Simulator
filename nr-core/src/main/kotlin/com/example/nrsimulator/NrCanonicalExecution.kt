@@ -34,7 +34,7 @@ object NrCanonicalExecution {
 
     fun run(config: Config = Config()): Report {
         require(config.payloadBits > 0 && config.targetCodeRate in 0.01..0.99)
-        require(config.layers in 1..4 && config.txAntennas >= config.layers && config.rxAntennas >= config.layers)
+        require(config.layers in 1..2 && config.txAntennas >= config.layers && config.rxAntennas >= config.layers)
         require(config.rv in 0..3 && config.snrDb.isFinite())
 
         // Preserve the validated V100 transport/coding/recovery path unchanged.
@@ -42,7 +42,7 @@ object NrCanonicalExecution {
             NrEndToEndV100.Config(config.payloadBits, config.targetCodeRate, config.modulation, 1, config.snrDb, config.rv)
         )
 
-        // V116: exact V101 DM-RS resources are now part of the waveform path and
+        // V116: exact V101 DM-RS resources are part of the waveform path and
         // the channel is estimated from received pilots rather than injected into detection.
         val spatial = NrCanonicalDmrsMimoV116.run(
             NrCanonicalDmrsMimoV116.Config(
