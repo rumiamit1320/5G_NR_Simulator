@@ -1,10 +1,6 @@
 package com.example.nrsimulator
 
-/**
- * Stable forward-PHY composition point. Historical versioned APIs remain intact.
- * V100 remains the validated transport/coding/recovery baseline while V116 adds
- * a real pilot-aided DM-RS -> OFDM -> MIMO-channel-estimation -> MMSE boundary.
- */
+/** Stable canonical PHY facade. Historical versioned APIs remain intact. */
 object NrCanonicalExecution {
     data class Config(
         val payloadBits: Int = 512,
@@ -37,47 +33,43 @@ object NrCanonicalExecution {
         require(config.layers in 1..2 && config.txAntennas >= config.layers && config.rxAntennas >= config.layers)
         require(config.rv in 0..3 && config.snrDb.isFinite())
 
-        // Preserve the validated V100 transport/coding/recovery path unchanged.
-        val r = NrEndToEndV100.run(
-            NrEndToEndV100.Config(config.payloadBits, config.targetCodeRate, config.modulation, 1, config.snrDb, config.rv)
-        )
-
-        // V116: exact V101 DM-RS resources are part of the waveform path and
-        // the channel is estimated from received pilots rather than injected into detection.
-        val spatial = NrCanonicalDmrsMimoV116.run(
-            NrCanonicalDmrsMimoV116.Config(
+        val r = NrCanonicalPhyV117.run(
+            NrCanonicalPhyV117.Config(
+                payloadBits = config.payloadBits,
+                targetCodeRate = config.targetCodeRate,
+                modulation = config.modulation,
                 layers = config.layers,
                 txAntennas = config.txAntennas,
                 rxAntennas = config.rxAntennas,
                 snrDb = config.snrDb,
+                rv = config.rv,
                 seed = config.channelSeed
             )
         )
-
         val stages = linkedMapOf(
-            "transport+TB-CRC" to (r.payloadBits > 0),
+            "transport+TB-CRC" to r.transportCrcPassed,
             "LDPC+rate-matching" to r.ldpcPassed,
-            "QAM+layer-mapping" to true,
-            "DMRS" to spatial.dmrsMapped,
-            "PDSCH-grid+OFDM" to spatial.dmrsMapped,
-            "channel+MIMO-waveform" to spatial.passed,
-            "DMRS-channel-estimation" to spatial.channelEstimated,
-            "MMSE-equalization+layer-recovery" to spatial.equalized,
+            "QAM+layer-mapping" to r.transmittedBits > 0,
+            "DMRS" to r.dmrsMapped,
+            "PDSCH-grid+OFDM" to r.dmrsMapped,
+            "channel+MIMO-waveform" to r.equalized,
+            "DMRS-channel-estimation" to r.channelEstimated,
+            "MMSE-equalization+layer-recovery" to r.equalized,
             "soft-LLR+LDPC-recovery" to r.ldpcPassed,
-            "TB-CRC-check" to r.crcPassed
+            "TB-CRC-check" to r.transportCrcPassed
         )
         return Report(
             r.passed && stages.values.all { it },
             stages,
             r.payloadBits,
             r.recoveredBits,
-            r.crcPassed,
+            r.transportCrcPassed,
             r.ldpcPassed,
-            spatial.evm,
-            spatial.passed,
-            spatial.detectedLayers,
-            spatial.postSinrDb,
-            "Canonical execution now uses V101 DM-RS pilots for channel estimation and the existing canonical MMSE detector. V100 remains the validated coding/recovery baseline; historical V1-V115 APIs remain intact."
+            r.evm,
+            r.equalized,
+            config.layers,
+            r.postSinrDb,
+            "Canonical execution is now the coherent V117 coded waveform path: V87 codeword, V101 DM-RS, OFDM/MIMO, received-pilot channel estimation, MMSE, soft LLR, V84/V86 recovery, and V83 TB CRC."
         )
     }
 }
