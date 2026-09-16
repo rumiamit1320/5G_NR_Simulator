@@ -2,6 +2,7 @@ package com.example.nrsimulator
 
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
