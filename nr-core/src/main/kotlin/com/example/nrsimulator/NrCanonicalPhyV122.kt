@@ -40,9 +40,7 @@ object NrCanonicalPhyV122 {
         require(config.phy.timeVaryingTdl) { "V122 requires V121 time-varying TDL to be enabled" }
 
         val times = (0 until config.sampleCount).map { config.startTimeSeconds + it * config.timeStepSeconds }
-        val reports = times.map { time ->
-            NrCanonicalPhyV117.run(config.phy.copy(tdlTimeSeconds = time))
-        }
+        val reports = times.map { time -> NrCanonicalPhyV117.run(config.phy.copy(tdlTimeSeconds = time)) }
         val allPhy = reports.all { it.passed }
 
         val channelSamples = times.map { time ->
@@ -76,49 +74,40 @@ object NrCanonicalPhyV122 {
         }
         val channelChanged = maxDelta > 1.0e-10
 
-        val zeroDopplerBase = config.phy.copy(tdlDopplerHz = 0.0, tdlTimeSeconds = config.startTimeSeconds)
-        val zeroA = NrCanonicalTdlV121.buildAtTime(
-            NrCanonicalTdlV121.Config(
-                tdl = NrCanonicalTdlV118.Config(
-                    profile = zeroDopplerBase.tdlProfile!!,
-                    txAntennas = zeroDopplerBase.txAntennas,
-                    rxAntennas = zeroDopplerBase.rxAntennas,
-                    sampleRateHz = 30.72e6,
-                    rmsDelayNs = 30.0,
-                    dopplerHz = 0.0,
-                    seed = zeroDopplerBase.seed + 118
-                ),
-                oscillators = zeroDopplerBase.tdlJakesOscillators
+        val zeroBase = config.phy.copy(tdlDopplerHz = 0.0, tdlTimeSeconds = config.startTimeSeconds)
+        val zeroConfig = NrCanonicalTdlV121.Config(
+            tdl = NrCanonicalTdlV118.Config(
+                profile = zeroBase.tdlProfile!!,
+                txAntennas = zeroBase.txAntennas,
+                rxAntennas = zeroBase.rxAntennas,
+                sampleRateHz = 30.72e6,
+                rmsDelayNs = 30.0,
+                dopplerHz = 0.0,
+                seed = zeroBase.seed + 118
             ),
-            config.startTimeSeconds
+            oscillators = zeroBase.tdlJakesOscillators,
+            timeStepSeconds = config.timeStepSeconds
         )
-        val zeroB = NrCanonicalTdlV121.buildAtTime(
-            NrCanonicalTdlV121.Config(
-                tdl = NrCanonicalTdlV118.Config(
-                    profile = zeroDopplerBase.tdlProfile!!,
-                    txAntennas = zeroDopplerBase.txAntennas,
-                    rxAntennas = zeroDopplerBase.rxAntennas,
-                    sampleRateHz = 30.72e6,
-                    rmsDelayNs = 30.0,
-                    dopplerHz = 0.0,
-                    seed = zeroDopplerBase.seed + 118
-                ),
-                oscillators = zeroDopplerBase.tdlJakesOscillators
-            ),
-            config.startTimeSeconds + 10.0
-        )
-        val zeroStatic = zeroA.taps == zeroB.taps
+        val zeroA = NrCanonicalTdlV121.buildAtTime(zeroConfig, config.startTimeSeconds)
+        val zeroB = NrCanonicalTdlV121.buildAtTime(zeroConfig, config.startTimeSeconds + 10.0)
+        val zeroStatic = tapsEquivalent(zeroA.taps, zeroB.taps)
 
         val passed = allPhy && (config.sampleCount == 1 || channelChanged) && zeroStatic
-        return Report(
-            passed = passed,
-            realizations = reports,
-            timesSeconds = times,
-            channelChanged = channelChanged,
-            maxChannelDelta = maxDelta,
-            allPhyChecksPassed = allPhy,
-            zeroDopplerStaticCheckPassed = zeroStatic,
-            notes = "V122 executes V117 coded PHY repeatedly at deterministic time instants with V121 Jakes TDL; default APIs remain unchanged."
-        )
+        return Report(passed, reports, times, channelChanged, maxDelta, allPhy, zeroStatic,
+            "V122 executes V117 coded PHY repeatedly at deterministic time instants with V121 Jakes TDL; default APIs remain unchanged.")
+    }
+
+    private fun tapsEquivalent(a: List<NrCanonicalSpatialEngine.Tap>, b: List<NrCanonicalSpatialEngine.Tap>): Boolean {
+        if (a.size != b.size) return false
+        for (i in a.indices) {
+            if (a[i].delay != b[i].delay) return false
+            val ac = a[i].coefficients
+            val bc = b[i].coefficients
+            if (ac.size != bc.size) return false
+            for (r in ac.indices) for (t in ac[r].indices) {
+                if (ac[r][t].re != bc[r][t].re || ac[r][t].im != bc[r][t].im) return false
+            }
+        }
+        return true
     }
 }
