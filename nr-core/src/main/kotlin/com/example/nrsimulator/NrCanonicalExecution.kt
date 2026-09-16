@@ -49,7 +49,7 @@ object NrCanonicalExecution {
         val stages = linkedMapOf(
             "transport+TB-CRC" to r.transportCrcPassed,
             "LDPC+rate-matching" to r.ldpcPassed,
-            "QAM+layer-mapping" to r.transmittedBits > 0,
+            "QAM+layer-mapping" to (r.transmittedBits > 0),
             "DMRS" to r.dmrsMapped,
             "PDSCH-grid+OFDM" to r.dmrsMapped,
             "channel+MIMO-waveform" to r.equalized,
