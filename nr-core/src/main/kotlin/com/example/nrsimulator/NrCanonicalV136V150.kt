@@ -62,7 +62,7 @@ object NrCanonicalV139Scrambling {
     fun scramble(bits:IntArray,c:Config=Config()):IntArray {
         var x=(c.cInit and 0x7fffffffL).toInt().coerceAtLeast(1)
         return IntArray(bits.size) {
-            x = ((x shl 1) xor (if ((x ushr 30) and 1)==1 0x80200003 else 0)) and 0x7fffffff
+            x = ((x shl 1) xor (if (((x ushr 30) and 1) == 1) 0x80200003 else 0)) and 0x7fffffff
             bits[it] xor (x and 1)
         }
     }
@@ -82,7 +82,7 @@ object NrCanonicalV141HarqSoftCombining {
         val base=if(previous.llr.isEmpty()) DoubleArray(newLlr.size) else previous.llr
         require(base.size==newLlr.size)
         val combined=DoubleArray(newLlr.size){base[it]+newLlr[it]}
-        val mean=combined.map(abs).average()
+        val mean=combined.map { abs(it) }.average()
         val p=previous.copy(rounds=previous.rounds+1,llr=combined,ack=ack)
         return Report(combined.all{it.isFinite()},p,p.rounds,mean)
     }
