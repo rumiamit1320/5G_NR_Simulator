@@ -59,15 +59,9 @@ object NrCanonicalPhyV117 {
             NrLdpcV82.BaseGraph.BG1 -> NrLdpcV85.exactTable(NrLdpcV85.BaseGraph.BG1)
             NrLdpcV82.BaseGraph.BG2 -> NrLdpcV85.exactTable(NrLdpcV85.BaseGraph.BG2)
         }
-        val encoded = NrCodingChainV87.encode(payload, config.targetCodeRate, table, Int.MAX_VALUE, config.rv)
-        val txBits = encoded.rateMatched.first()
-        val usable = txBits.size - txBits.size % config.modulation.bitsPerSymbol
-        require(usable > 0)
-        val txBitsUsed = txBits.copyOf(usable)
-        val qam = NrPhyMappingV89.modulate(txBitsUsed, config.modulation)
         val dmrs = NrDmrsV101.pdsch(
             NrDmrsV101.Config(
-                configurationType = NrDmrsV101.ConfigurationType.TYPE1,
+                configurationType = NrDmrsV101.ConfigurationType.TYPE2,
                 maxLength = NrDmrsV101.MaxLength.LEN1,
                 additionalPosition = NrDmrsV101.AdditionalPosition.POS0,
                 allocationStartSymbol = 0,
@@ -77,7 +71,10 @@ object NrCanonicalPhyV117 {
                 nSCID = 0,
                 symbolsPerSlot = 14,
                 startSubcarrier = 0,
-                resourceBlocks = config.resourceBlocks,
+                // Data REs span the whole FFT grid, so the DM-RS must too;
+                // otherwise the channel estimate is extrapolated far outside
+                // the pilot band, which fails on frequency-selective TDL channels.
+                resourceBlocks = config.fftSize / 12,
                 ports = IntArray(config.layers) { 1000 + 2 * it }
             )
         )
@@ -90,6 +87,16 @@ object NrCanonicalPhyV117 {
         val pilotSet = pilots.flatMap { it.map { p -> p.first } }.toSet()
         val dmrsMapped = pilots.all { it.isNotEmpty() }
         val dataPositions = (0 until config.fftSize).filter { it !in pilotSet }
+        // Cap the rate-matched block to the RE budget so the codeword fits the grid.
+        val codeBlockCount = NrTransportV83.segment(payload, bg).codeBlocks.size
+        val capacityBits = (dataPositions.size * config.layers * config.modulation.bitsPerSymbol) / codeBlockCount
+        require(capacityBits > 0) { "No RE capacity for the configured allocation" }
+        val encoded = NrCodingChainV87.encode(payload, config.targetCodeRate, table, capacityBits, config.rv)
+        val txBits = encoded.rateMatched.first()
+        val usable = txBits.size - txBits.size % config.modulation.bitsPerSymbol
+        require(usable > 0)
+        val txBitsUsed = txBits.copyOf(usable)
+        val qam = NrPhyMappingV89.modulate(txBitsUsed, config.modulation)
         require(qam.size <= dataPositions.size * config.layers) { "Codeword does not fit configured RE capacity" }
 
         val txFreq = Array(config.txAntennas) { Array(config.fftSize) { NrCanonicalSpatialEngine.C(0.0, 0.0) } }
