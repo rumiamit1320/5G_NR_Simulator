@@ -15,7 +15,7 @@ object NrHarqSoftPhyV73Tests {
         )
         val llr = NrHarqSoftPhyV73.qamLlrs(tx, 4, 0.01)
         check("QPSK LLR finite", llr.all { it.isFinite() })
-        check("QPSK LLR has sign", llr[0] > 0.0 && llr[2] < 0.0)
+        check("QPSK LLR has sign", llr[0] > 0.0 && llr[3] < 0.0)
 
         val soft = NrHarqSoftPhyV73.rateRecoverSoft(doubleArrayOf(1.0, 2.0, 3.0, 4.0), 4, 0)
         check("soft rate recovery accumulates", soft.contentEquals(doubleArrayOf(1.0, 2.0, 3.0, 4.0)))

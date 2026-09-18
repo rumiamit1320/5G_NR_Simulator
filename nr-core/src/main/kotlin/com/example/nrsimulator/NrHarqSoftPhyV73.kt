@@ -102,12 +102,6 @@ object NrHarqSoftPhyV73 {
         return out
     }
 
-    private fun f(a: Double, b: Double): Double =
-        sign(a) * sign(b) * min(abs(a), abs(b))
-
-    private fun g(a: Double, b: Double, u: Int): Double =
-        b + (if (u == 0) a else -a)
-
     private fun sign(x: Double): Double = when {
         x > 0.0 -> 1.0
         x < 0.0 -> -1.0
@@ -128,16 +122,17 @@ object NrHarqSoftPhyV73 {
     private fun decodeNode(alpha: DoubleArray, frozen: BooleanArray): IntArray {
         if (alpha.size == 1) return intArrayOf(if (frozen[0]) 0 else if (alpha[0] >= 0.0) 0 else 1)
         val half = alpha.size / 2
-        val leftLlr = DoubleArray(half) { i -> f(alpha[i], alpha[i + half]) }
-        val leftFrozen = frozen.copyOfRange(0, half)
-        val left = decodeNode(leftLlr, leftFrozen)
-        val rightLlr = DoubleArray(half) { i -> g(alpha[i], alpha[i + half], left[i]) }
-        val rightFrozen = frozen.copyOfRange(half, frozen.size)
-        val right = decodeNode(rightLlr, rightFrozen)
+        // V47 applies the natural-order Kronecker transform (no bit reversal):
+        // xLeft = G*(uLeft xor uRight) and xRight = G*uRight, so each half is
+        // decoded from its own LLRs and combined afterwards: uLeft = v xor uRight.
+        val frozenLeft = BooleanArray(half) { frozen[it] && frozen[it + half] }
+        val frozenRight = frozen.copyOfRange(half, frozen.size)
+        val v = decodeNode(alpha.copyOfRange(0, half), frozenLeft)
+        val ur = decodeNode(alpha.copyOfRange(half, alpha.size), frozenRight)
         val out = IntArray(alpha.size)
         for (i in 0 until half) {
-            out[i] = left[i] xor right[i]
-            out[i + half] = right[i]
+            out[i] = if (frozen[i]) 0 else v[i] xor ur[i]
+            out[i + half] = ur[i]
         }
         return out
     }
