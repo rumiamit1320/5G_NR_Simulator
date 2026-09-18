@@ -2,7 +2,6 @@ package com.example.nrsimulator
 
 import kotlin.math.PI
 import kotlin.math.cos
-import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -66,7 +65,7 @@ object NrCanonicalTdlV121 {
                         val losPhase = deterministicPhase(mixSeed(linkSeed, 0x4f5343, pathIndex, rx * 31 + tx))
                         val los = NrCanonicalSpatialEngine.C(
                             cos(2.0 * PI * 0.7 * base.dopplerHz * timeSeconds + losPhase),
-                            sin(2.0 * PI * 0.7 * base.dopplerHz * timeSeconds + losPhase)
+                            kotlin.math.sin(2.0 * PI * 0.7 * base.dopplerHz * timeSeconds + losPhase)
                         )
                         val losScale = sqrt(k / (k + 1.0))
                         val diffuseScale = sqrt(1.0 / (k + 1.0))
@@ -130,7 +129,7 @@ object NrCanonicalTdlV121 {
     ): NrCanonicalSpatialEngine.C {
         if (dopplerHz == 0.0) {
             val phase = deterministicPhase(seed)
-            return NrCanonicalSpatialEngine.C(cos(phase), sin(phase))
+            return NrCanonicalSpatialEngine.C(cos(phase), kotlin.math.sin(phase))
         }
 
         val random = Random(seed)
@@ -146,7 +145,7 @@ object NrCanonicalTdlV121 {
             val phase0 = 2.0 * PI * random.nextDouble()
             val phase = 2.0 * PI * frequency * timeSeconds + phase0
             re += cos(phase)
-            im += sin(phase)
+            im += kotlin.math.sin(phase)
         }
         return NrCanonicalSpatialEngine.C(re * scale, im * scale)
     }
