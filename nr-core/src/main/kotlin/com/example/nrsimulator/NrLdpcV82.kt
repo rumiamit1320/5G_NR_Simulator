@@ -46,5 +46,7 @@ object NrLdpcV82 {
     }
 
     fun parityCheckSize(bg: BaseGraph, z: Int): Int = geometry(bg).rows * z
-    fun encodedSize(bg: BaseGraph, z: Int): Int = geometry(bg).codeColumns * z
+    /** Full encoded codeword width including the 2 punctured information columns;
+     *  the circular-buffer rate matcher skips the first 2Z positions during bit selection. */
+    fun encodedSize(bg: BaseGraph, z: Int): Int = geometry(bg).columns * z
 }
