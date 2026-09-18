@@ -93,26 +93,9 @@ object NrCanonicalScheduledRxV135 {
             val symbols = NrPhyMappingV89.modulate(txBits, config.modulation)
             val mapped = NrCanonicalPhysicalMapperV129.map(plan, config.seed + grant.ueId * 101 + index)
 
-            val freq = Array(config.fftSize) { NrCanonicalSpatialEngine.C(0.0, 0.0) }
-            val txPilotByK = HashMap<Int, NrCanonicalSpatialEngine.C>()
-            for ((re, s) in mapped.dmrsSymbols) {
-                val k = re.prb * 12 + re.subcarrier
-                val z = NrCanonicalSpatialEngine.C(s.re, s.im)
-                freq[k] = z
-                txPilotByK[k] = z
-            }
-            for (i in symbols.indices) {
-                val re = plan.data[i]
-                val k = re.prb * 12 + re.subcarrier
-                freq[k] = NrCanonicalSpatialEngine.C(symbols[i].re, symbols[i].im)
-            }
-
-            val txTime = NrCanonicalSpatialEngine.fft(freq, inverse = true)
-            val cp = config.cyclicPrefixSamples
-            val txWithCp = Array(1) { Array(config.fftSize + cp) { i ->
-                txTime[if (i < cp) config.fftSize - cp + i else i - cp]
-            } }
-
+            // The V124 schedule spans multiple slot symbols; each slot symbol is
+            // transmitted as its own OFDM symbol through the same per-run TDL
+            // realization, so no two scheduled REs collide in the frequency grid.
             val channel = if (config.dopplerHz > 0.0) {
                 NrCanonicalTdlV121.buildAtTime(
                     NrCanonicalTdlV121.Config(
@@ -132,21 +115,59 @@ object NrCanonicalScheduledRxV135 {
                     )
                 )
             }
-            val ch = NrCanonicalSpatialEngine.applyTdl(txWithCp, channel.taps, config.snrDb, config.seed + grant.ueId)
-            val rxTime = ch.output[0].copyOfRange(cp, cp + config.fftSize)
-            val rxFreq = NrCanonicalSpatialEngine.fft(rxTime)
+            val cp = config.cyclicPrefixSamples
 
-            // Multi-symbol schedule has pilots on the DM-RS symbol. At the current
-            // single-symbol waveform boundary, the same scheduled frequency-domain
-            // realization is used for the receiver estimate.
+            val txPilotByK = HashMap<Int, NrCanonicalSpatialEngine.C>()
+            val dmrsBySymbol = HashMap<Int, ArrayList<Pair<Int, NrCanonicalSpatialEngine.C>>>()
+            for ((re, s) in mapped.dmrsSymbols) {
+                val k = re.prb * 12 + re.subcarrier
+                val z = NrCanonicalSpatialEngine.C(s.re, s.im)
+                txPilotByK[k] = z
+                dmrsBySymbol.getOrPut(re.symbol) { ArrayList() }.add(k to z)
+            }
+            val dataBySymbol = HashMap<Int, ArrayList<Pair<Int, Int>>>()
+            for (i in symbols.indices) {
+                val re = plan.data[i]
+                dataBySymbol.getOrPut(re.symbol) { ArrayList() }.add(re.prb * 12 + re.subcarrier to i)
+            }
+
+            val rxFreqBySymbol = HashMap<Int, Array<NrCanonicalSpatialEngine.C>>()
+            var noiseVariance = Double.NaN
+            for (symbol in (dmrsBySymbol.keys + dataBySymbol.keys).sorted()) {
+                val freq = Array(config.fftSize) { NrCanonicalSpatialEngine.C(0.0, 0.0) }
+                for ((k, z) in dmrsBySymbol[symbol] ?: emptyList()) freq[k] = z
+                for ((k, i) in dataBySymbol[symbol] ?: emptyList()) {
+                    freq[k] = NrCanonicalSpatialEngine.C(symbols[i].re, symbols[i].im)
+                }
+                val txTime = NrCanonicalSpatialEngine.fft(freq, inverse = true)
+                val txWithCp = Array(1) { Array(config.fftSize + cp) { i ->
+                    txTime[if (i < cp) config.fftSize - cp + i else i - cp]
+                } }
+                val ch = NrCanonicalSpatialEngine.applyTdl(
+                    txWithCp, channel.taps, config.snrDb, config.seed + grant.ueId * 131 + symbol * 17
+                )
+                noiseVariance = ch.noiseVariance
+                rxFreqBySymbol[symbol] = NrCanonicalSpatialEngine.fft(
+                    ch.output[0].copyOfRange(cp, cp + config.fftSize)
+                )
+            }
+
+            // The schedule has pilots on the DM-RS symbol; the scheduled
+            // frequency-domain realization is estimated from those pilots and shared
+            // across the grant's slot symbols (static per-run channel).
             val pilotK = txPilotByK.keys.sorted().toIntArray()
+            val pilotRxByK = HashMap<Int, NrCanonicalSpatialEngine.C>()
+            for ((re, _) in mapped.dmrsSymbols) {
+                val k = re.prb * 12 + re.subcarrier
+                rxFreqBySymbol[re.symbol]?.let { pilotRxByK[k] = it[k] }
+            }
             val h = Array(config.fftSize) { NrCanonicalSpatialEngine.C(0.0, 0.0) }
             for (k in 0 until config.fftSize) {
                 val lo = pilotK.lastOrNull { it <= k } ?: pilotK.first()
                 val hi = pilotK.firstOrNull { it >= k } ?: pilotK.last()
                 val a = if (hi == lo) 0.0 else (k - lo).toDouble() / (hi - lo)
-                val hl = rxFreq[lo] / txPilotByK[lo]!!
-                val hh = rxFreq[hi] / txPilotByK[hi]!!
+                val hl = pilotRxByK[lo]!! / txPilotByK[lo]!!
+                val hh = pilotRxByK[hi]!! / txPilotByK[hi]!!
                 h[k] = hl * (1.0 - a) + hh * a
             }
 
@@ -164,8 +185,9 @@ object NrCanonicalScheduledRxV135 {
             var err = 0.0
             var ref = 0.0
             for (i in symbols.indices) {
-                val k = plan.data[i].prb * 12 + plan.data[i].subcarrier
-                val z = rxFreq[k] / h[k]
+                val re = plan.data[i]
+                val k = re.prb * 12 + re.subcarrier
+                val z = rxFreqBySymbol[re.symbol]!![k] / h[k]
                 detected += NrPhyMappingV89.Complex(z.re, z.im)
                 err += (z.re - symbols[i].re) * (z.re - symbols[i].re) +
                     (z.im - symbols[i].im) * (z.im - symbols[i].im)
@@ -173,7 +195,7 @@ object NrCanonicalScheduledRxV135 {
             }
             val evm = sqrt(err / ref.coerceAtLeast(1e-18))
             val postSinr = 10.0 * log10((1.0 / evm.coerceAtLeast(1e-12).pow2()).coerceAtLeast(1e-12))
-            val llr = softDemodulate(detected.toTypedArray(), config.modulation, ch.noiseVariance)
+            val llr = softDemodulate(detected.toTypedArray(), config.modulation, noiseVariance)
             val recovered = NrRateMatchingV84.rateRecover(
                 llr, NrRateMatchingV84.Config(coded.baseGraph, coded.liftingSize, 0, usable)
             )
