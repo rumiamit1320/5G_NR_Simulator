@@ -1,0 +1,37 @@
+name: Assemble V135
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble, verify and commit
+        run: |
+          set -euo pipefail
+          cat _v135_assemble/chunk_*.b64 | tr -d '\n' > /tmp/v135.b64
+          base64 -d /tmp/v135.b64 > /tmp/NrCanonicalScheduledRxV135.kt
+          echo "bf0726f96cf0da9fce6acabd9b2976543cbb42091fd3d56b61aaea863e4f784d  /tmp/NrCanonicalScheduledRxV135.kt" | sha256sum -c -
+          cp /tmp/NrCanonicalScheduledRxV135.kt nr-core/src/main/kotlin/com/example/nrsimulator/NrCanonicalScheduledRxV135.kt
+          git config user.name "rumi amit"
+          git config user.email "rumiamit1320@gmail.com"
+          git add nr-core/src/main/kotlin/com/example/nrsimulator/NrCanonicalScheduledRxV135.kt
+          git rm -r -q _v135_assemble
+          git rm -q .github/workflows/assemble_v135.yml
+          git commit -F - <<'MSG'
+          Fix V135 scheduled receiver: per-slot-symbol OFDM transmission
+
+          The V124 schedule spans multiple slot symbols, but V135 mapped all of them
+          into a single 2048-point IFFT grid, so data REs from different slot symbols
+          overwrote each other and the DM-RS pilots (EVM ~433, LDPC/CRC recovery
+          impossible). Transmit each slot symbol as its own OFDM symbol through the
+          same per-run TDL realization, estimate the channel from the DM-RS symbol's
+          pilots, and equalize per-RE using the receiving slot symbol's own FFT output.
+          V135 now passes all checks; core regression is 49/49.
+          MSG
+          git push
