@@ -64,9 +64,19 @@ object NrLdpcV85 {
 
     fun hasExactTable(bg: BaseGraph): Boolean = runCatching { exactTable(bg); true }.getOrDefault(false)
 
+    /** Gzip+base64 snapshot fallback so a fresh checkout runs without the prep step. */
+    private fun embeddedTable(name: String): java.io.ByteArrayInputStream? {
+        val packed = NrLdpcV85EmbeddedTables.EMBEDDED[name] ?: return null
+        val bytes = java.util.Base64.getDecoder().decode(packed)
+        return java.util.zip.GZIPInputStream(bytes.inputStream()).use { gz ->
+            java.io.ByteArrayInputStream(gz.readBytes())
+        }
+    }
+
     private fun readMatrix(bg: BaseGraph, set: Int, rows: Int, columns: Int): Array<IntArray> {
         val resource = "/nr/ldpc/BG${if (bg == BaseGraph.BG1) 1 else 2}S$set.txt"
         val stream = NrLdpcV85::class.java.getResourceAsStream(resource)
+            ?: embeddedTable(resource.removePrefix("/nr/ldpc/").removeSuffix(".txt"))
             ?: error("Missing V85 resource $resource; run tools/prepare_nr_ldpc_tables.py")
         BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
             val header = reader.readLine() ?: error("Missing V85 header in $resource")
