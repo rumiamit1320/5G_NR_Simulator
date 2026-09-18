@@ -6,8 +6,8 @@ object NrCanonicalScheduledMultiUeV132 {
         val numerology: NrCanonicalNumerologyV123.Config = NrCanonicalNumerologyV123.Config(),
         val prbCount: Int = 24,
         val ues: List<NrCanonicalSchedulerV126.Ue> = listOf(
-            NrCanonicalSchedulerV126.Ue(1, 2048, 2, maxLayers = 1),
-            NrCanonicalSchedulerV126.Ue(2, 2048, 1, maxLayers = 1)
+            NrCanonicalSchedulerV126.Ue(1, bufferBytes = 2048, priority = 2, maxLayers = 1),
+            NrCanonicalSchedulerV126.Ue(2, bufferBytes = 2048, priority = 1, maxLayers = 1)
         ),
         val snrDb: Double = 35.0,
         val dopplerHz: Double = 0.0,
