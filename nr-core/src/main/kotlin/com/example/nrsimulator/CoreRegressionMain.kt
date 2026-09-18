@@ -33,6 +33,11 @@ fun main() {
     runCatching { check("V120 normative TDL tests",NrCanonicalTdlV120Tests.run().passed) }.onFailure { check("V120 normative TDL tests",false) }
     runCatching { check("V121 Jakes Doppler tests",NrCanonicalTdlV121Tests.run().passed) }.onFailure { check("V121 Jakes Doppler tests",false) }
     runCatching { check("V122 time-sequence coded PHY tests",NrCanonicalPhyV122Tests.run().passed) }.onFailure { check("V122 time-sequence coded PHY tests",false) }
+    runCatching { check("V123 numerology/resource grid tests",NrCanonicalV123Tests.run().passed) }.onFailure { check("V123 numerology/resource grid tests",false) }
+    runCatching { check("V124 multi-symbol PHY tests",NrCanonicalMultiSymbolV124Tests.run().passed) }.onFailure { check("V124 multi-symbol PHY tests",false) }
+    runCatching { check("V125 channel processing tests",NrCanonicalChannelV125Tests.run().passed) }.onFailure { check("V125 channel processing tests",false) }
+    runCatching { check("V126 scheduler tests",NrCanonicalSchedulerV126Tests.run().passed) }.onFailure { check("V126 scheduler tests",false) }
+    runCatching { check("V127 canonical integration tests",NrCanonicalExecutionV127Tests.run().passed) }.onFailure { check("V127 canonical integration tests",false) }
     runCatching { check("Canonical PHY execution",NrCanonicalExecutionTests.run().passed) }.onFailure { check("Canonical PHY execution",false) }
     val all=checks.values.all{it}; println("CORE_REGRESSION=${if(all)"PASS"else"FAIL"}"); if(!all) error("Core regression failed")
 }
