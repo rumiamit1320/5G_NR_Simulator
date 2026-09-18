@@ -39,6 +39,7 @@ fun main() {
     runCatching { check("V126 scheduler tests",NrCanonicalSchedulerV126Tests.run().passed) }.onFailure { check("V126 scheduler tests",false) }
     runCatching { check("V127 canonical integration tests",NrCanonicalExecutionV127Tests.run().passed) }.onFailure { check("V127 canonical integration tests",false) }
     runCatching { check("V128-V132 canonical execution tests",NrCanonicalV128V132Tests.run().passed) }.onFailure { check("V128-V132 canonical execution tests",false) }
+    runCatching { check("V133 shared scheduled waveform tests",NrCanonicalSharedWaveformV133Tests.run().passed) }.onFailure { check("V133 shared scheduled waveform tests",false) }
     runCatching { check("Canonical PHY execution",NrCanonicalExecutionTests.run().passed) }.onFailure { check("Canonical PHY execution",false) }
     val all=checks.values.all{it}; println("CORE_REGRESSION=${if(all)"PASS"else"FAIL"}"); if(!all) error("Core regression failed")
 }
