@@ -28,6 +28,7 @@ object NrCanonicalTdlV120Tests {
         }
         checks["TDL-D default K factor"] = kotlin.math.abs(NrCanonicalTdlV118.defaultKFactorDb(NrCanonicalTdlV118.Profile.TDL_D) - 13.3) < 1e-9
         checks["TDL-E default K factor"] = kotlin.math.abs(NrCanonicalTdlV118.defaultKFactorDb(NrCanonicalTdlV118.Profile.TDL_E) - 22.0) < 1e-9
+        // Deliberately exercise the exact Release-19 table order; delays are not required to be monotone.
         return Result(checks.values.all { it }, checks)
     }
 }
