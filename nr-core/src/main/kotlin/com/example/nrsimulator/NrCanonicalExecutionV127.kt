@@ -26,7 +26,7 @@ object NrCanonicalExecutionV127 {
     fun run(config: Config = Config()): Result {
         require(config.prbCount > 0)
         val timing = NrCanonicalNumerologyV123.timing(config.numerology)
-        val schedule = NrCanonicalSchedulerV126.schedule(config.ues, config.scheduler.copy(slot = config.numerology.slotIndex))
+        val schedule = NrCanonicalSchedulerV126.schedule(config.ues, config.scheduler.copy(prbCount = config.prbCount, slot = config.numerology.slotIndex))
         val plans = schedule.grants.map { grant ->
             NrCanonicalMultiSymbolV124.plan(
                 NrCanonicalMultiSymbolV124.Config(
