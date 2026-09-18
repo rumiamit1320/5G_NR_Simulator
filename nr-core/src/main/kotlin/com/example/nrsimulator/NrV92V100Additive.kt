@@ -135,7 +135,7 @@ object NrLinkAdaptationV96 {
             sinrDb < -5 -> Triple(NrPhyMappingV89.Modulation.BPSK, .20, 1)
             sinrDb < 0 -> Triple(NrPhyMappingV89.Modulation.QPSK, .30, 2)
             sinrDb < 5 -> Triple(NrPhyMappingV89.Modulation.QPSK, .50, 4)
-            sinrDb < 10 -> Triple(NrPhyMappingV89.Modulation.QAM16, .50, 7)
+            sinrDb <= 10 -> Triple(NrPhyMappingV89.Modulation.QAM16, .50, 7)
             sinrDb < 16 -> Triple(NrPhyMappingV89.Modulation.QAM64, .60, 11)
             else -> Triple(NrPhyMappingV89.Modulation.QAM256, .75, 15)
         }
@@ -173,12 +173,12 @@ object NrRachV98 {
 object NrRefVectorsV99 {
     data class Vector(val name: String, val input: IntArray, val expected: DoubleArray)
     fun smokeVectors(): List<Vector> = listOf(
-        Vector("BPSK-0101", intArrayOf(0,1,0,1), doubleArrayOf(1.0,0.0,-1.0,0.0)),
+        Vector("BPSK-01", intArrayOf(0,1), doubleArrayOf(1.0,0.0,-1.0,0.0)),
         Vector("QPSK-00", intArrayOf(0,0), doubleArrayOf(1.0/sqrt(2.0),1.0/sqrt(2.0)))
     )
     fun check(): List<Boolean> = smokeVectors().map { v ->
         when (v.name) {
-            "BPSK-0101" -> NrPhyMappingV89.modulate(v.input, NrPhyMappingV89.Modulation.BPSK).flatMap { listOf(it.re,it.im) }.toDoubleArray().contentEquals(v.expected)
+            "BPSK-01" -> NrPhyMappingV89.modulate(v.input, NrPhyMappingV89.Modulation.BPSK).flatMap { listOf(it.re,it.im) }.toDoubleArray().contentEquals(v.expected)
             "QPSK-00" -> NrPhyMappingV89.modulate(v.input, NrPhyMappingV89.Modulation.QPSK).flatMap { listOf(it.re,it.im) }.toDoubleArray().contentEquals(v.expected)
             else -> false
         }
