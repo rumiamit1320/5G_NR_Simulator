@@ -14,24 +14,27 @@ object NrLdpcV74 {
         for(br in 0 until m.rows) for(bc in 0 until m.cols){val s=m.shifts[br][bc];if(s>=0)for(i in 0 until m.z)h[br*m.z+i][bc*m.z+(i+s)%m.z]=1}
         return h
     }
-    /** Systematic reference encoder for an explicitly supplied full-rank binary parity-check matrix. */
+    /** Systematic reference encoder for an explicitly supplied full-rank binary parity-check matrix.
+     *  Pivot columns are chosen from the tail of the codeword so the k information
+     *  bits always occupy the first k positions of the returned codeword. */
     fun encode(info:IntArray,h:Array<IntArray>):IntArray{
         require(h.isNotEmpty());val n=h[0].size;require(h.all{it.size==n});val k=n-h.size;require(info.size==k){"info length must equal n-m"}
         val a=Array(h.size){r->IntArray(n){c->h[r][c]}}
+        val piv=IntArray(h.size){-1}
         var row=0
-        for(col in 0 until n){
+        for(col in n-1 downTo 0){
+            if(row>=h.size)break
             val p=(row until h.size).firstOrNull{a[it][col]==1}?:continue
             val tmp=a[row];a[row]=a[p];a[p]=tmp
-            for(r in h.indices) if(r!=row&&a[r][col]==1) for(c in col until n)a[r][c]=a[r][c] xor a[row][c]
-            row++;if(row==h.size)break
+            for(r in h.indices) if(r!=row&&a[r][col]==1) for(c in 0 until n) a[r][c]=a[r][c] xor a[row][c]
+            piv[row]=col;row++
         }
         require(row==h.size){"parity-check matrix is not full row rank"}
-        val piv=IntArray(h.size){r->(0 until n).firstOrNull{a[r][it]==1}?:-1}
-        val x=IntArray(n);val pivotSet=piv.toSet();val non=(0 until n).filter{it !in pivotSet};require(non.size==k)
-        for(i in 0 until k)x[non[i]]=info[i] and 1
-        for(r in h.indices.reversed()){
+        val pivotSet=piv.toSet();val non=(0 until n).filter{it !in pivotSet};require(non.size==k)
+        val x=IntArray(n);for(i in 0 until k)x[non[i]]=info[i] and 1
+        for(r in h.indices){
             val pc=piv[r];var v=0
-            for(c in pc+1 until n)if(a[r][c]==1)v=v xor x[c]
+            for(c in non) if(a[r][c]==1) v=v xor x[c]
             x[pc]=v
         }
         require(syndrome(h,x)==0){"LDPC encoder produced non-zero syndrome"};return x

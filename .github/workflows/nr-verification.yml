@@ -37,7 +37,7 @@ jobs:
         run: gradle :nr-core:build :web-server:build --no-daemon
 
       - name: Run existing core regression suite
-        run: gradle :nr-core:test --no-daemon
+        run: gradle :nr-core:coreRegression --no-daemon
 
       - name: Start existing web server
         shell: bash
