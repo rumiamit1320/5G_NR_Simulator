@@ -33,9 +33,10 @@ object NrResearchGradeV85V91Tests {
             ck("V86 QC-LDPC decode", false)
         }
 
-        if (bg1 != null) {
+        if (bg1 != null && bg2 != null) {
             val payload = IntArray(1000) { (it * 7) and 1 }
-            val chain = NrCodingChainV87.encode(payload, 0.5, bg1, 512, 0)
+            val table = if (NrLdpcV82.selectBaseGraph(payload.size, 0.5) == NrLdpcV82.BaseGraph.BG1) bg1 else bg2
+            val chain = NrCodingChainV87.encode(payload, 0.5, table, 512, 0)
             ck("V87 coding chain", chain.codeBlocks.isNotEmpty() && chain.codewords.size == chain.codeBlocks.size && chain.rateMatched.all { it.size <= 512 })
         } else ck("V87 coding chain", false)
 
