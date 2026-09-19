@@ -101,8 +101,8 @@ object NrCanonicalPhyV122 {
         if (a.size != b.size) return false
         for (i in a.indices) {
             if (a[i].delay != b[i].delay) return false
-            val ac = a[i].coefficients
-            val bc = b[i].coefficients
+            val ac = a[i].h
+            val bc = b[i].h
             if (ac.size != bc.size) return false
             for (r in ac.indices) for (t in ac[r].indices) {
                 if (ac[r][t].re != bc[r][t].re || ac[r][t].im != bc[r][t].im) return false
