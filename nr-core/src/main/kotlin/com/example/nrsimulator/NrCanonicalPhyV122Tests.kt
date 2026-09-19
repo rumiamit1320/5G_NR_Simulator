@@ -76,7 +76,7 @@ object NrCanonicalPhyV122Tests {
         checks["TDL-D Ricean first tap"] = riceanD.fading == NrCanonicalTdlV118.Fading.RICEAN_FIRST_TAP
         checks["TDL-E Ricean first tap"] = riceanE.fading == NrCanonicalTdlV118.Fading.RICEAN_FIRST_TAP
         checks["2x2 D/E channel finite"] = listOf(riceanD, riceanE).all { result ->
-            result.taps.all { tap -> tap.coefficients.flatten().all { it.re.isFinite() && it.im.isFinite() } }
+            result.taps.all { tap -> tap.h.flatten().all { it.re.isFinite() && it.im.isFinite() } }
         }
 
         val zeroA = NrCanonicalTdlV121.buildAtTime(
@@ -100,8 +100,8 @@ object NrCanonicalPhyV122Tests {
         if (a.size != b.size) return false
         for (i in a.indices) {
             if (a[i].delay != b[i].delay) return false
-            val ac = a[i].coefficients
-            val bc = b[i].coefficients
+            val ac = a[i].h
+            val bc = b[i].h
             if (ac.size != bc.size) return false
             for (r in ac.indices) for (t in ac[r].indices) {
                 if (ac[r][t].re != bc[r][t].re || ac[r][t].im != bc[r][t].im) return false
